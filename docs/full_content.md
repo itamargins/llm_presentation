@@ -121,7 +121,7 @@ Where:
 - (These functions help "dropout" in a way that is dependent on the data)
 - GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are sort of a data-dependent dropout. They are derived by using x*p(x), where p(x) can be any CDF (Gaussian and Sigmoid in this case). These two functions are very similar.
 
-![](../assets/swiglu.jpg){width=2500px}
+![](../assets/swiglu.jpg)
 <div align="center">
   <img src="../assets/guessilldie.jpg" width="150">
 </div>
@@ -244,8 +244,8 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 - For every single token generated, the GPU must fetch all model weights (e.g., 14-16 GB for an 8B FP16 model) from VRAM into fast SRAM caches. This means the GPU cores are mostly idle, only to perform a tiny number of calculations on a single vector. 
 
 
-#TODO - context window?
 ## The Context Window ($C_{\text{max}}$)
+#TODO - context window?
 
 
 
@@ -276,9 +276,9 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
                 - Context Length ($s$): 8,192 tokens
                 - Batch Size ($b$): 16 concurrent sequences
     - Speed improvement
-    - Demo pt.1
+    - Demo pt.1 - #TODO
 - What does it cost?
-    - Demo pt.2
+    - Demo pt.2 - #TODO
     
 
 ## Optimization Techniques:
@@ -323,7 +323,6 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 
 
 # More Cool stuff
-
 ### https://hfviewer.com/ - architectures and glossary
 - Any model on HuggingFace can be visualized - simply replace the url
     - Transformer Block: https://hfviewer.com/glossary/transformer-block/

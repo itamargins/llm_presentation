@@ -89,7 +89,7 @@ As updates $\Delta x^{(l)}$ are repeatedly added to the residual stream, the var
 <center>(a) - Post-LN, (b) - Pre-LN</center>
 
 
-#### RMSNorm (Root Mean Square Normalization)
+#### RMSNorm (Root Mean Square Normalization) #TODO
 Modern LLMs (Llama 3, Mistral, Qwen) replace standard LayerNorm with **RMSNorm** to improve computational speed without sacrificing variance stabilization.
 
 Standard LayerNorm computes both mean $\mu$ and variance $\sigma^2$:
@@ -112,8 +112,8 @@ Where:
 - The attention mixes information between tokens in the sequence, and the FFN is reponsible for transforming information within the hidden dimension, for each token independently.
 - It acts as "Fact Retrieval" - you can think of $w_1$ as a memory Key matrix ($d_{\text{model}} \times d_{\text{ff}}$) where each column represents a pattern detector, $w_2$ is the memory Value matrix, where each row represents a "concept" payload to be injected back into the residual stream.
 - For example, during pre-training, when the model is repeatedly forced to predict "Paris" given "capital of France", gradient updates adjust the weights so that: 
-    - Column $i$ of $W_1$ aligns closely with the vector representation of "capital of France". 
-    - Row $i$ of $W_2$ aligns closely with the vector representation of "Paris".
+    - Column $i$ of $W_1$ aligns closely with the vector  of "capital of France". 
+    - Row $i$ of $W_2$ aligns closely with the vector  of "Paris".
 
 ### SwiGLU Activation
 - Useful References - 
@@ -178,8 +178,6 @@ When $M_{i,j} = -\infty$, $\exp(-\infty) = 0$, completely blocking information l
 
 ## Language Modeling and Generation #TODO
 
-### Causal Masking?
-
 ### LM Head
 After passing through all $L$ Transformer blocks, the final hidden state tensor $x^{(L)} \in \mathbb{R}^{B \times L \times d_{\text{model}}}$ represents the fully contextualized sequence representations.
 
@@ -235,7 +233,6 @@ Dynamic Behavior: When the model is uncertain (e.g., creative writing), probabil
 During inference, a Decoder-Only LLM executes in two distinct operational phases that exhibit radically different computational bottlenecks and hardware performance profiles.
 ### Prefill
 - Processing input prompt in parallel. This is done by  Matrix-Matrix multiplications (GEMM) of shape $[B, L_{\text{prompt}}, d_{\text{model}}] \times [d_{\text{model}}, d_{\text{out}}]$.
-- The attention mask is causal - #TODO - understand exactly why?
 
 ### Decode
 - Generates output tokens serially, one step at a time ($L_{\text{step}} = 1$). The output token from step $t$ becomes the input token for step $t+1$.
@@ -246,7 +243,11 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
     - SRAM - Ultra-fast memory located directly next to the GPU. Operates at ~10x speed of VRAM, but very small (~50MB total).
 - For every single token generated, the GPU must fetch all model weights (e.g., 14-16 GB for an 8B FP16 model) from VRAM into fast SRAM caches. This means the GPU cores are mostly idle, only to perform a tiny number of calculations on a single vector. 
 
+
 #TODO - context window?
+## The Context Window ($C_{\text{max}}$)
+
+
 
 ## KV Cache:
 - Useful References - 
@@ -293,10 +294,6 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 ![](../assets/gqa.jpg)
 #TODO - expand
 
-
-### DeepSeep improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention)
-    - MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
-
 ![](../assets/attn_sbs.jpg)
 
 ![](../assets/attn_performance.jpg)
@@ -305,20 +302,30 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 
 - Should mention?: training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA (by mean-pooling K-projections within groups) and finally training for a few steps more. Mean pooling proved better than taking the first key or taking a randomly-selected key from the group.
 
-#### Paged Attention?
+### DeepSeep improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention) #TODO
+- MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
+
+#### Paged Attention? #TODO
+- Problem: Traditional KV cache allocation requires contiguous memory blocks in VRAM per request, leading to severe virtual memory fragmentation (up to 60-80% memory waste).
+
+- Solution: Operates like virtual memory paging in operating systems. It splits the KV Cache into fixed-size physical memory blocks (e.g., 16 tokens per block) allocated dynamically via a lookup page table.
+
+- Impact: Eliminates memory fragmentation, enabling significantly higher batch sizes on fixed GPU hardware.
 
 ### Flash Attention? #TODO
-    - https://www.youtube.com/watch?v=RcFrRqcV4ZA
+- https://www.youtube.com/watch?v=RcFrRqcV4ZA
 
-    - The Problem: Standard attention computes $A = \text{softmax}(QK^T / \sqrt{d})V$. Storing that intermediate $N \times N$ attention matrix $A$ in High Bandwidth Memory (HBM) creates an $O(N^2)$ memory footprint and makes attention memory-bandwidth bound rather than compute-bound.The Solution: FlashAttention uses tiling (online softmax) to compute attention block-by-block inside fast SRAM on the GPU chip without ever writing the massive $N \times N$ matrix back to HBM.The Takeaway: While GQA saves VRAM space, FlashAttention gives you raw wall-clock speedup and exact (non-approximated) attention computation.
+- The Problem: Standard attention computes $A = \text{softmax}(QK^T / \sqrt{d})V$. Storing that intermediate $N \times N$ attention matrix $A$ in High Bandwidth Memory (HBM) creates an $O(N^2)$ memory footprint and makes attention memory-bandwidth bound rather than compute-bound.
+- The Solution: FlashAttention uses tiling (online softmax) to compute attention block-by-block inside fast SRAM on the GPU chip without ever writing the massive $N \times N$ matrix back to HBM.
+- The Takeaway: While GQA saves VRAM space, FlashAttention gives you raw wall-clock speedup and exact (non-approximated) attention computation.
 
 
 
 
 # More Cool stuff
 
-## https://hfviewer.com/ - architectures and glossary
-    - Any model on HuggingFace can be visualized - simply replace the url
+### https://hfviewer.com/ - architectures and glossary
+- Any model on HuggingFace can be visualized - simply replace the url
     - Transformer Block: https://hfviewer.com/glossary/transformer-block/
     - GQA: https://hfviewer.com/glossary/grouped-query-attention/
     - Qwen3.8-27B: https://hfviewer.com/Qwen/Qwen3.8-27B

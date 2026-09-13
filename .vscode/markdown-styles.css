@@ -1,0 +1,7 @@
+/* Center-align all images in VS Code Markdown Preview */
+.vscode-body img,
+img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}

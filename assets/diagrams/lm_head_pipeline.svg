@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 272" width="340" height="272" font-family="Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="h1" markerWidth="8" markerHeight="8" refX="6" refY="2.5"
+            orient="auto"><path d="M0,0 L6,2.5 L0,5 z" fill="#222"/></marker>
+  </defs>
+  <g text-anchor="middle" font-size="14">
+    <rect x="45" y="4" width="250" height="30" fill="#5528CC" fill-opacity="0.15"
+          stroke="#5528CC" stroke-width="1.5"/>
+    <text x="170" y="24">x⁽ᴸ⁾ₜ   [d_model]</text>
+    <line x1="170" y1="34" x2="170" y2="46" stroke="#222" stroke-width="1.8" marker-end="url(#h1)"/>
+    <rect x="45" y="48" width="250" height="30" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="170" y="68">RMSNorm  (final)</text>
+    <line x1="170" y1="78" x2="170" y2="90" stroke="#222" stroke-width="1.8" marker-end="url(#h1)"/>
+    <rect x="45" y="92" width="250" height="30" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="170" y="112">W_vocab  [d_model × |V|]</text>
+    <line x1="170" y1="122" x2="170" y2="134" stroke="#222" stroke-width="1.8" marker-end="url(#h1)"/>
+    <rect x="45" y="136" width="250" height="30" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="170" y="156">logits zₜ   [|V|]</text>
+    <line x1="170" y1="166" x2="170" y2="178" stroke="#222" stroke-width="1.8" marker-end="url(#h1)"/>
+    <rect x="45" y="180" width="250" height="30" fill="#fff" stroke="#E05315" stroke-width="2"/>
+    <text x="170" y="200">÷ T</text>
+    <line x1="170" y1="210" x2="170" y2="222" stroke="#222" stroke-width="1.8" marker-end="url(#h1)"/>
+    <rect x="45" y="224" width="250" height="30" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="170" y="244">Softmax</text>
+    <line x1="170" y1="254" x2="170" y2="266" stroke="#222" stroke-width="1.8" marker-end="url(#h1)"/>
+  </g>
+</svg>

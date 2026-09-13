@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 215" width="520" height="215" font-family="Helvetica Neue, Arial, sans-serif">
+  <text x="10" y="14" font-size="13" fill="#555">same logits z = (3, 2, 1, 0.5, 0)</text>
+  <g fill="#5528CC">
+    <rect x="24" y="50" width="20" height="120"/>
+    <rect x="52" y="168" width="20" height="2"/>
+    <rect x="80" y="168" width="20" height="2"/>
+    <rect x="108" y="168" width="20" height="2"/>
+    <rect x="136" y="168" width="20" height="2"/>
+  </g>
+  <g fill="#5528CC">
+    <rect x="194" y="97" width="20" height="73"/>
+    <rect x="222" y="143" width="20" height="27"/>
+    <rect x="250" y="160" width="20" height="10"/>
+    <rect x="278" y="164" width="20" height="6"/>
+    <rect x="306" y="166" width="20" height="4"/>
+  </g>
+  <g fill="#5528CC">
+    <rect x="364" y="122" width="20" height="48"/>
+    <rect x="392" y="141" width="20" height="29"/>
+    <rect x="420" y="152" width="20" height="18"/>
+    <rect x="448" y="156" width="20" height="14"/>
+    <rect x="476" y="159" width="20" height="11"/>
+  </g>
+  <g stroke="#222" stroke-width="1.5">
+    <line x1="18" y1="170" x2="162" y2="170"/>
+    <line x1="188" y1="170" x2="332" y2="170"/>
+    <line x1="358" y1="170" x2="502" y2="170"/>
+  </g>
+  <g font-size="14" text-anchor="middle" fill="#E05315">
+    <text x="90" y="194">T → 0</text>
+    <text x="260" y="194">T = 1</text>
+    <text x="430" y="194">T = 2</text>
+  </g>
+  <g font-size="11" text-anchor="middle" fill="#555">
+    <text x="90" y="210">argmax</text>
+    <text x="260" y="210">learned distribution</text>
+    <text x="430" y="210">flattened</text>
+  </g>
+</svg>

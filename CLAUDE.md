@@ -63,21 +63,22 @@ Technical correctness is more important than visual decoration.
   style: "@import '../design/theme.css';"
   ---
 
+## Source Hierarchy
 
+When creating or modifying slides:
 
-# Source of Truth
+1. docs/ contains the technical source material.
+2. slides/ contains the approved slide-level specification.
+3. output/deck.md contains the presentation implementation.
+4. design/theme.css contains visual styling.
 
-Do not infer slide intent from the generated PPTX.
+Do not silently introduce technical claims from general model knowledge
+when the relevant claim is covered by docs/.
 
-The source of truth is:
+If the source material is ambiguous or technically questionable, flag it
+rather than silently rewriting it.
 
-1. slides/<slide>/contract.md
-2. deck/deck_spec.md
-3. design/design_system.md
-4. design/notation.md
-
-The generated PPTX is an output artifact.
-
+Do not duplicate large sections of docs/ into slides/.
 ---
 
 # Context Discipline
@@ -222,3 +223,45 @@ When tradeoffs exist, prioritize:
 4. Visual hierarchy
 5. Consistency
 6. Aesthetics
+
+
+## Slide Generation
+
+A slide contract is an implementation constraint.
+
+Do not add content merely because it would make the slide "more complete."
+
+Do not turn every paragraph of a source document into slide text.
+
+The presentation should communicate the source material, not reproduce it.
+
+## Technical Diagrams
+
+Technical diagrams should normally be generated as standalone SVG files
+under assets/diagrams/.
+
+Do NOT embed raw SVG/XML source directly into slide Markdown.
+
+The slide Markdown should reference the generated SVG as an image.
+
+Never allow SVG/XML markup to appear as visible slide text.
+
+After generating or modifying a diagram:
+1. verify that the SVG file exists,
+2. verify that the Marp slide references it correctly,
+3. render the slide,
+4. visually inspect the rendered result.
+
+## Rendering Verification
+
+Never consider a slide successfully implemented merely because the
+Markdown source looks correct.
+
+The rendered slide is the source of truth for visual correctness.
+
+Always render and inspect slides after making changes involving:
+- diagrams
+- equations
+- positioning
+- CSS
+- images

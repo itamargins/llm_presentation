@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 245" width="500" height="245" font-family="Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="e1" markerWidth="8" markerHeight="8" refX="6" refY="2.5"
+            orient="auto"><path d="M0,0 L6,2.5 L0,5 z" fill="#222"/></marker>
+  </defs>
+  <g font-size="14" text-anchor="middle">
+    <rect x="30" y="20" width="70" height="32" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="65" y="41">x₁</text>
+    <rect x="140" y="20" width="70" height="32" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="175" y="41">x₂</text>
+    <rect x="250" y="20" width="70" height="32" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="285" y="41">x₃</text>
+    <rect x="360" y="20" width="70" height="32" fill="#fff" stroke="#222" stroke-width="1.5"/>
+    <text x="395" y="41">x₄</text>
+  </g>
+  <g fill="none" stroke="#5528CC" stroke-width="1.8">
+    <path d="M65,52 Q120,88 175,52"/>
+    <path d="M65,52 Q175,100 285,52"/>
+    <path d="M65,52 Q230,116 395,52"/>
+    <path d="M175,52 Q230,88 285,52"/>
+    <path d="M175,52 Q285,100 395,52"/>
+    <path d="M285,52 Q340,88 395,52"/>
+  </g>
+  <text x="440" y="84" font-size="13" fill="#5528CC">across L</text>
+
+  <g font-size="13" text-anchor="middle">
+    <line x1="65" y1="118" x2="65" y2="140" stroke="#222" stroke-width="1.8" marker-end="url(#e1)"/>
+    <line x1="175" y1="118" x2="175" y2="140" stroke="#222" stroke-width="1.8" marker-end="url(#e1)"/>
+    <line x1="285" y1="118" x2="285" y2="140" stroke="#222" stroke-width="1.8" marker-end="url(#e1)"/>
+    <line x1="395" y1="118" x2="395" y2="140" stroke="#222" stroke-width="1.8" marker-end="url(#e1)"/>
+    <rect x="30" y="144" width="70" height="38" fill="#fff" stroke="#E05315" stroke-width="2"/>
+    <text x="65" y="168">FFN</text>
+    <rect x="140" y="144" width="70" height="38" fill="#fff" stroke="#E05315" stroke-width="2"/>
+    <text x="175" y="168">FFN</text>
+    <rect x="250" y="144" width="70" height="38" fill="#fff" stroke="#E05315" stroke-width="2"/>
+    <text x="285" y="168">FFN</text>
+    <rect x="360" y="144" width="70" height="38" fill="#fff" stroke="#E05315" stroke-width="2"/>
+    <text x="395" y="168">FFN</text>
+  </g>
+  <text x="440" y="167" font-size="13" fill="#E05315">across d</text>
+  <text x="30" y="208" font-size="13" fill="#555">same weights at every position</text>
+  <text x="30" y="230" font-size="13" fill="#E05315">no horizontal edges in this row</text>
+</svg>

@@ -1,4 +1,7 @@
 {
   "markdown.marp.enableHTML": true,
-  "markdown.marp.mathTypesetting": "katex"
+  "markdown.marp.mathTypesetting": "katex",
+  "markdown.styles": [
+    ".vscode/markdown-styles.css"
+  ]
 }

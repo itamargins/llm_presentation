@@ -4,7 +4,7 @@
 <!-- # MHA
 - Multi-head attention conceptually splits each embedding equally among the heads, but in practice, each head is served the full embedding and projects it down to the smaller space.
 
-    - For example: original d_model = 512, num_heads = 8, so each head attends to a 512/8 = 64 sized embedding. Instead of splitting 512 to 8 equal pieces, each 512 is projected down to 64 using 8 matrices. This is done for Q, K and V, so 3*8 matrics, each shaped [512x64].
+    - For example: original d_model = 512, num_heads = 8, so each head attends to a 512/8 = 64 sized embedding. Instead of splitting 512 to 8 equal pieces, each 512 is projected down to 64 using 8 matrices. This is done for Q, K and V, so 3*8 matrices, each shaped [512x64].
 
     - A parallel implementation uses one large matrix [512x512], and the output is split to num_heads equally. -->
 <!-- ============================================================================== -->
@@ -19,7 +19,7 @@
 - Useful reference: Letitia - https://www.youtube.com/watch?v=BprirYymXrg
 
 
-## Attention -> Trasnformer Block
+## Attention -> Transformer Block
 After MHA, there is  a projection called W_O that merges the information from the various heads.
 Simply concatenating these $h$ outputs produces a tensor of shape $[B, L, h \cdot d_k] = [B, L, d_{\text{model}}]$. However, without a linear projection:
 1. **Head Isolation:** Information extracted by head $i$ remains trapped in slice $[i \cdot d_k : (i+1) \cdot d_k]$ and cannot interact with representations learned by head $j$.
@@ -82,7 +82,7 @@ As updates $\Delta x^{(l)}$ are repeatedly added to the residual stream, the var
   Gradients passing through the normalization operator in the main residual path are scaled inversely by the norm of the activations. Near the output layer, activations are large, making early layer updates tiny. This required delicate "warm-up" learning rate schedules.
 * **Pre-LayerNorm (Modern Standard):**
   $$x^{(l)} = x^{(l-1)} + f(\text{LN}(x^{(l-1)}))$$
-  Normalization is placed exclusively on the *branch* leading into the sub-layer. The main residual path remains pure identity, enabling stable zero-warmup training of 100B+ parameter models and larger leraning rates to be used.
+    Normalization is placed exclusively on the *branch* leading into the sub-layer. The main residual path remains pure identity, enabling stable zero-warmup training of 100B+ parameter models and larger learning rates to be used.
     - "the gradients are well-behaved without any exploding or vanishing for the Pre-LN Transformer both theoretically and empirically" (Xiong et al., 2020)
 
 ![](../assets/pre_post_ln.png)
@@ -109,7 +109,7 @@ Where:
 
 ### FFN 
 
-- The attention mixes information between tokens in the sequence, and the FFN is reponsible for transforming information within the hidden dimension, for each token independently.
+- The attention mixes information between tokens in the sequence, and the FFN is responsible for transforming information within the hidden dimension, for each token independently.
 - It acts as "Fact Retrieval" - you can think of $w_1$ as a memory Key matrix ($d_{\text{model}} \times d_{\text{ff}}$) where each column represents a pattern detector, $w_2$ is the memory Value matrix, where each row represents a "concept" payload to be injected back into the residual stream.
 - For example, during pre-training, when the model is repeatedly forced to predict "Paris" given "capital of France", gradient updates adjust the weights so that: 
     - Column $i$ of $W_1$ aligns closely with the vector  of "capital of France". 
@@ -119,7 +119,7 @@ Where:
 - Useful References - 
     - https://www.youtube.com/watch?v=2FaI2Fen1mQ
 - (These functions help "dropout" in a way that is dependent on the data)
-- GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are sort of a data-dependent dropout. They are derived by using x*p(x), where p(x) can be any CDF (Guassian and Sigmoid in this case). These two functions are very similar.
+- GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are sort of a data-dependent dropout. They are derived by using x*p(x), where p(x) can be any CDF (Gaussian and Sigmoid in this case). These two functions are very similar.
 
 ![](../assets/swiglu.jpg){width=2500px}
 <div align="center">
@@ -302,7 +302,7 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 
 - Should mention?: training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA (by mean-pooling K-projections within groups) and finally training for a few steps more. Mean pooling proved better than taking the first key or taking a randomly-selected key from the group.
 
-### DeepSeep improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention) #TODO
+### DeepSeek improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention) #TODO
 - MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
 
 #### Paged Attention? #TODO

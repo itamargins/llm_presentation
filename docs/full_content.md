@@ -137,10 +137,10 @@ graph TD
     W3 --> OUT["Output Vector [d_model]"]
 ```
 
-![](../assets/swiglu.jpg)
-<div align="center">
+![](../assets/swiglu_block.png)
+<!-- <div align="center">
   <img src="../assets/guessilldie.jpg" width="150">
-</div>
+</div> -->
 
 
 #### Parameter-Matching Strategy for SwiGLU
@@ -154,7 +154,9 @@ In Llama 3 8B: $d_{\text{model}} = 4096 \implies d_{\text{ff}} = 14336 \approx \
 
 
 ### Result: Complete Transformer Block
-#TODO - add text + diagram
+<div align="center">
+  <img src="../assets/transformer.png" height="500">
+</div>  
 
 - **Terminology -**
     - *"Transformer Block" - Each one of the Nx modules*

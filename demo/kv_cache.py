@@ -12,6 +12,7 @@ from demo_utils import (
     c_green,
     c_val,
     c_yellow,
+    c_dim,
     select_device,
     sync_device,
     print_section,
@@ -21,6 +22,13 @@ from demo_utils import (
     apply_safety_cap,
     print_descriptive_results,
     print_lecture_takeaway,
+    print_try_this_next,
+    print_narration,
+    compute_attention_architecture,
+    print_attention_architecture_explanation,
+    print_prefill_vs_decode_explanation,
+    get_quantized_cache_memory_mb,
+    print_quantized_cache_comparison,
 )
 
 
@@ -43,6 +51,13 @@ class DemoConfig:
     device_mode: str = "auto"  # Options: "auto", "cuda", "cpu"
     step_log_every: int = 10
 
+    # BONUS (optional, may not be used): quantized KV cache memory comparison.
+    # Requires an optional dependency ("pip install optimum-quanto" or "pip install hqq"),
+    # and is skipped cleanly with a message if it isn't installed.
+    run_quantized_cache_bonus: bool = False
+    quantized_cache_backend: str = "quanto"  # Options: "quanto", "hqq"
+    quantized_cache_nbits: int = 4
+
 
 #%%
 # 1. SETUP MODEL, TOKENIZER & SAFETY CAPS
@@ -55,13 +70,13 @@ STEP_LOG_EVERY = cfg.step_log_every
 
 device = select_device(cfg.device_mode)
 
-print_section("0) Setup: model, prompt, and run configuration")
+print_section("1) Setup: model, prompt, and run configuration")
 print(
     c_yellow(
-        "This demo compares autoregressive decoding in two modes: "
+        "This demo compares autoregressive decoding in two modes: \n"
         "(1) without KV cache, where the model recomputes attention over the growing "
-        "context each step, and (2) with KV cache, where prior keys/values are reused "
-        "so each step processes mainly the newest token. It exemplifies the core "
+        "context each step, \nand (2) with KV cache, where prior keys/values are reused "
+        "so each step processes mainly the newest token. \nIt exemplifies the core "
         "inference trade-off: much faster per-token latency in exchange for steadily "
         "growing KV-cache memory usage."
     )
@@ -90,12 +105,19 @@ batch_size = input_ids.shape[0]
 # Model structural parameters for theoretical memory calculation
 n_layers = int(getattr(model.config, "n_layer", getattr(model.config, "num_hidden_layers", -1)))
 n_heads = int(getattr(model.config, "n_head", getattr(model.config, "num_attention_heads", -1)))
+n_kv_heads = int(getattr(model.config, "num_key_value_heads", n_heads))
 hidden_size = int(getattr(model.config, "n_embd", getattr(model.config, "hidden_size", -1)))
+head_dim = hidden_size // n_heads
 dtype_bytes = next(model.parameters()).element_size()
 
 print(f"Final safe prompt length: {c_green(str(prompt_len))} tokens (Max model window: {max_model_ctx})")
 print(f"Batch size: {batch_size}")
 
+print_narration("Before benchmarking, let's see how this model's attention heads shape the cache we're about to measure.")
+arch_info = compute_attention_architecture(n_layers, n_heads, n_kv_heads, head_dim, dtype_bytes, batch_size)
+print_attention_architecture_explanation(n_heads, n_kv_heads, head_dim, arch_info)
+
+print_narration("One housekeeping step before timing anything: warm up CUDA so first-call kernel compilation doesn't skew the benchmark below.")
 print(f"\n{c_yellow('Performing CUDA warm-up pass over full context length...')}")
 with torch.no_grad():
     _ = model(input_ids, use_cache=False)
@@ -122,7 +144,8 @@ def one_line_preview(text, max_chars=260):
 # ==============================================================================
 # PART 1: TIME BENCHMARKING
 # ==============================================================================
-print_section("1) Benchmark A: decoding WITHOUT KV cache")
+print_section("3) Benchmark A: decoding WITHOUT KV cache")
+print_narration("First, the expensive baseline: recompute attention over the entire growing context at every single step.")
 
 curr_input = input_ids.clone()
 with torch.no_grad():
@@ -144,7 +167,8 @@ with torch.no_grad():
         if should_log_step(step, NUM_GENERATED_TOKENS, STEP_LOG_EVERY):
             print_step("[No cache ]", step, NUM_GENERATED_TOKENS, input_len, step_ms)
 
-print_section("2) Benchmark B: decoding WITH KV cache")
+print_section("4) Benchmark B: decoding WITH KV cache")
+print_narration("Now the optimized path: reuse cached Key/Value tensors so each step only processes the newest token.")
 
 curr_input = input_ids.clone()
 past_key_values = None
@@ -180,7 +204,8 @@ with torch.no_grad():
 # ==============================================================================
 # PART 2: MEMORY BENCHMARKING
 # ==============================================================================
-print_section("2.5) Memory pass: measuring cache footprint")
+print_section("5) Memory pass: measuring cache footprint")
+print_narration("Repeating the cached run once more, this time sampling the cache's VRAM footprint after every step.")
 past_key_values = None
 curr_input = input_ids.clone()
 memory_growth_mb = []
@@ -193,8 +218,8 @@ with torch.no_grad():
         curr_input = next_token
 
 theoretical_bytes_per_token = None
-if n_layers > 0 and hidden_size > 0:
-    theoretical_bytes_per_token = 2 * batch_size * n_layers * hidden_size * dtype_bytes
+if n_layers > 0 and n_kv_heads > 0 and head_dim > 0:
+    theoretical_bytes_per_token = 2 * batch_size * n_layers * (n_kv_heads * head_dim) * dtype_bytes
 theoretical_mb_per_token = (
     theoretical_bytes_per_token / (1024 ** 2)
     if theoretical_bytes_per_token is not None
@@ -226,6 +251,7 @@ per_token_cache_growth_mb = (
 token_match = generated_tokens_no_cache == generated_tokens_with_cache
 
 # Output detailed results with descriptions
+print_narration("With both passes complete, here's what the timing and memory numbers say.")
 print_descriptive_results(
     total_no_cache_ms,
     total_with_cache_ms,
@@ -247,9 +273,18 @@ print_descriptive_results(
     memory_growth_mb,
 )
 
+print_narration("Zooming into the cached run: its very first step behaves very differently from every step after it.")
+prefill_time_ms = times_with_cache[0]
+decode_times_ms = times_with_cache[1:]
+prefill_throughput, decode_throughput = print_prefill_vs_decode_explanation(
+    prompt_len, prefill_time_ms, decode_times_ms
+)
+
+print_narration("Distilling everything above into the one trade-off worth remembering.")
 print_lecture_takeaway(overall_speedup, late_speedup, per_token_cache_growth_mb)
 
-print_section("4.5) Decoded text snapshot")
+print_section("9) Decoded text snapshot")
+print_narration("As a sanity check, here's what the cached run actually generated.")
 prompt_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
 generated_text = tokenizer.decode(generated_tokens_with_cache, skip_special_tokens=True)
 
@@ -268,6 +303,55 @@ if prompt_truncated or generated_truncated:
     if generated_truncated:
         truncated_parts.append("generated")
     print(c_yellow(f"Note: {', '.join(truncated_parts)} text truncated for single-line readability."))
+
+# ==============================================================================
+# BONUS: QUANTIZED KV CACHE (optional -- may not be used)
+# ==============================================================================
+print_section("10) BONUS: Quantized KV Cache Memory Comparison (optional)")
+if not cfg.run_quantized_cache_bonus:
+    print(c_dim("Skipped by default -- set cfg.run_quantized_cache_bonus = True to run it (see Step 11)."))
+else:
+    print_narration("As a bonus, let's see how much smaller the cache gets if we quantize it instead of just growing it.")
+    print(
+        c_yellow(
+            f"Attempting a {cfg.quantized_cache_nbits}-bit quantized KV cache via the "
+            f"'{cfg.quantized_cache_backend}' backend. This is an optional bonus -- it "
+            "requires an extra dependency and is skipped cleanly if it isn't installed."
+        )
+    )
+    try:
+        from transformers.cache_utils import QuantizedCache
+
+        # Capped for speed: quantize/dequantize overhead makes this slower than the main pass.
+        bonus_steps = min(40, NUM_GENERATED_TOKENS)
+        quantized_cache = QuantizedCache(
+            backend=cfg.quantized_cache_backend,
+            config=model.config,
+            nbits=cfg.quantized_cache_nbits,
+        )
+        curr_input = input_ids.clone()
+        quantized_memory_mb = []
+        with torch.no_grad():
+            for _ in range(bonus_steps):
+                outputs = model(curr_input, past_key_values=quantized_cache, use_cache=True)
+                quantized_cache = outputs.past_key_values
+                quantized_memory_mb.append(get_quantized_cache_memory_mb(quantized_cache))
+                next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1, keepdim=True)
+                curr_input = next_token
+
+        print_quantized_cache_comparison(
+            cfg.quantized_cache_backend,
+            cfg.quantized_cache_nbits,
+            memory_growth_mb[bonus_steps - 1],
+            quantized_memory_mb[-1],
+            bonus_steps,
+        )
+    except ImportError as e:
+        print(c_yellow(f"[BONUS SKIPPED] Missing optional dependency: {e}"))
+    except Exception as e:
+        print(c_yellow(f"[BONUS SKIPPED] Quantized cache demo failed: {e}"))
+
+print_try_this_next(cfg, arch_info)
 
 # ==============================================================================
 # PART 3: LIVE VISUALIZATION
@@ -315,6 +399,22 @@ ax1.text(
     bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
 )
 
+# Add prefill-vs-decode box on Plot 1
+ax1.text(
+    0.98,
+    0.02,
+    (
+        f"Prefill: {prefill_time_ms:.1f} ms ({prefill_throughput:,.0f} tok/s, compute-bound)\n"
+        f"Decode avg: {mean(decode_times_ms):.2f} ms/token "
+        f"({decode_throughput:,.1f} tok/s, memory-bound)"
+    ),
+    transform=ax1.transAxes,
+    horizontalalignment="right",
+    verticalalignment="bottom",
+    fontsize=8.5,
+    bbox=dict(boxstyle="round", facecolor="#eef6ff", edgecolor="#0275d8", alpha=0.9),
+)
+
 # Annotate Token 2 Spike if present
 if len(times_with_cache) >= 2:
     token2_time = times_with_cache[1]
@@ -347,6 +447,22 @@ ax2.text(
     verticalalignment="top",
     fontsize=9,
     bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
+)
+
+# Add MHA/GQA/MQA architecture box on Plot 2
+ax2.text(
+    0.98,
+    0.02,
+    (
+        f"{arch_info['attn_type']}: {n_heads} query heads -> {n_kv_heads} KV heads "
+        f"({arch_info['group_size']}x sharing)\n"
+        f"Cache is {arch_info['savings_ratio']:.1f}x smaller than an MHA model of this size"
+    ),
+    transform=ax2.transAxes,
+    horizontalalignment="right",
+    verticalalignment="bottom",
+    fontsize=8.5,
+    bbox=dict(boxstyle="round", facecolor="#fff8e6", edgecolor="#f0ad4e", alpha=0.9),
 )
 
 # Footnote Explanation under the plots

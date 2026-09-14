@@ -56,6 +56,16 @@ STEP_LOG_EVERY = cfg.step_log_every
 device = select_device(cfg.device_mode)
 
 print_section("0) Setup: model, prompt, and run configuration")
+print(
+    c_yellow(
+        "This demo compares autoregressive decoding in two modes: "
+        "(1) without KV cache, where the model recomputes attention over the growing "
+        "context each step, and (2) with KV cache, where prior keys/values are reused "
+        "so each step processes mainly the newest token. It exemplifies the core "
+        "inference trade-off: much faster per-token latency in exchange for steadily "
+        "growing KV-cache memory usage."
+    )
+)
 print(f"Model: {c_val(MODEL_NAME)}")
 print(f"Device: {c_val(str(device))}")
 print(f"Generated tokens requested: {c_val(str(NUM_GENERATED_TOKENS))}")
@@ -97,6 +107,17 @@ times_no_cache = []
 times_with_cache = []
 generated_tokens_no_cache = []
 generated_tokens_with_cache = []
+
+
+def one_line_preview(text, max_chars=260):
+    """Collapse text to one line and truncate for terminal readability."""
+    single_line = " ".join(text.split())
+    if len(single_line) <= max_chars:
+        return single_line, False
+
+    keep_head = int(max_chars * 0.7)
+    keep_tail = max_chars - keep_head - 3
+    return f"{single_line[:keep_head]}...{single_line[-keep_tail:]}", True
 
 # ==============================================================================
 # PART 1: TIME BENCHMARKING
@@ -227,6 +248,27 @@ print_descriptive_results(
 )
 
 print_lecture_takeaway(overall_speedup, late_speedup, per_token_cache_growth_mb)
+
+print_section("4.5) Decoded text snapshot")
+prompt_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
+generated_text = tokenizer.decode(generated_tokens_with_cache, skip_special_tokens=True)
+
+prompt_view, prompt_truncated = one_line_preview(prompt_text, max_chars=260)
+generated_view, generated_truncated = one_line_preview(generated_text, max_chars=260)
+
+print(
+    f"{c_yellow('Prompt:')} {c_val(prompt_view)} "
+    f"{c_yellow('| Generated:')} {c_green(generated_view)}"
+)
+
+if prompt_truncated or generated_truncated:
+    truncated_parts = []
+    if prompt_truncated:
+        truncated_parts.append("prompt")
+    if generated_truncated:
+        truncated_parts.append("generated")
+    print(c_yellow(f"Note: {', '.join(truncated_parts)} text truncated for single-line readability."))
+
 # ==============================================================================
 # PART 3: LIVE VISUALIZATION
 # ==============================================================================

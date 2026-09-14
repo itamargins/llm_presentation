@@ -9,7 +9,7 @@
     - A parallel implementation uses one large matrix [512x512], and the output is split to num_heads equally. -->
 <!-- ============================================================================== -->
 
-# **Anatomy of a Real-Life Transformer**
+# *Anatomy of a Real-Life Transformer*
 <div align="center">
   <img src="../assets/transformer.png" height="500">
 </div>  
@@ -31,7 +31,7 @@
 
 So, a new linear projection (termed "output", $w_o$) is added.
 
-### Mathematical Formulation
+#### Mathematical Formulation
 The concatenated head representations are projected back into the residual space using the output projection matrix $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$:
 
 $$\text{MHA}(Q, K, V) = \text{Concat}(\text{head}_1, \text{head}_2, \dots, \text{head}_h) W^O$$
@@ -41,7 +41,7 @@ Where:
 * $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$
 * Output Tensor $\in \mathbb{R}^{B \times L \times d_{\text{model}}}$
 
-### Concrete Tensor Example
+#### Concrete Tensor Example
 Consider a Llama 3 8B configuration:
 * Hidden dimension $d_{\text{model}} = 4096$
 * Query heads $h = 32$
@@ -65,12 +65,7 @@ Unrolling the recursion over $L$ layers yields:
 
 $$x^{(L)} = x^{(0)} + \sum_{l=1}^{L} \Delta x^{(l)}$$
 
-During backpropagation, the gradient of the loss $\mathcal{L}$ with respect to the input state $x^{(0)}$ is:
-
-$$\frac{\partial \mathcal{L}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \frac{\partial x^{(L)}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \left( I + \sum_{l=1}^{L} \frac{\partial \Delta x^{(l)}}{\partial x^{(0)}} \right)$$
-
-The identity term $I$ guarantees that gradients flow backwards through all $L$ layers directly without decaying, eliminating the vanishing gradient wall regardless of depth.
-
+Applying the chain rule for the loss $\mathcal{L}$ with respect to the input state $x^{(0)}$ gives:$$\frac{\partial \mathcal{L}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \frac{\partial x^{(L)}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \left( \mathbf{I} + \sum_{l=1}^L \frac{\partial \Delta x^{(l)}}{\partial x^{(0)}} \right)$$The identity term $\mathbf{I}$ ensures that the gradient $\frac{\partial \mathcal{L}}{\partial x^{(L)}}$ can flow directly back to $x^{(0)}$ unimpeded, eliminating the vanishing gradient problem regardless of depth $L$.
 
 ### Normalization
 
@@ -168,9 +163,8 @@ In Llama 3 8B: $d_{\text{model}} = 4096 \implies d_{\text{ff}} = 14336 \approx \
 
 ##  2. Encoder-Decoder architecture and variants
 # TODO - review and visuals
-> Now we have a complete, fully functional Transformer block — with RMSNorm maintaining stability, Multi-Head Attention mixing sequence tokens, and SwiGLU FFN retrieving features. But a single block sitting on a whiteboard doesn't generate text, translate languages, or extract embeddings.  
+> Now we have a complete, fully functional Transformer block — with RMSNorm maintaining stability, Multi-Head Attention mixing sequence tokens, and SwiGLU FFN retrieving features. 
 > To turn this block into an actual model, we have to make two fundamental engineering decisions: How do we stack them? and How do we restrict what each token is allowed to see?  
-> Historically, the field split into three distinct paths based on attention masking: models that look everywhere, models that look in two separate stages, and models that strictly look into the past. Let's look at the Encoder, the Decoder, and their hybrid friends.
 
 ### Encoder-Only (BERT)
 - Attention Mechanism: Unmasked, full Bi-Directional Self-Attention. Every token at position $i$ can attend to all other tokens at positions $j \in [1, L]$ (both past and future).
@@ -281,40 +275,37 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 
 
 ## 5. KV Cache:
-- Useful References - 
-    - https://www.youtube.com/watch?v=7OrMFn86PlM
-    - https://www.youtube.com/watch?v=RUlQmkFY4F8
-    - https://www.youtube.com/watch?v=gpp57x_z_Jg
 
-- Explain the problem
-> Now, ask yourself a critical question: What happens to the Attention calculation when we generate token $N+1$?  
-> To compute Attention for that new token, it needs to attend to Query $N+1$ against the Keys and Values of every single preceding token in the sequence—tokens 1 all the way through $N$.  
-> If we naively recompute the Query, Key, and Value vectors for all $N$ past tokens at every step, our sequence computation scales quadratically at $O(L^2)$. By the time you reach token 2,000, your GPU is spending 99% of its time recalculating math it already did 1,999 steps ago.  
-> To fix this, we introduce the single most critical data structure in modern LLM inference: The Key-Value (KV) Cache.Instead of recomputing the past, we save the $K$ and $V$ tensors generated during the Prefill phase, store them in GPU memory, and simply concatenate the new token's Key and Value at every decode step. We trade memory capacity to buy back computational speed.
+> Here's a critical question: What happens to the Attention calculation when we generate token $N+1$?  
+- To compute Attention for that new token, it needs to attend to Query $N+1$ against the Keys and Values of every single preceding token in the sequence—tokens 1 all the way through $N$.  
+- If we naively recompute the Query, Key, and Value vectors for all $N$ past tokens at every step, our sequence computation scales quadratically at $O(L^2)$. By the time you reach token 2,000, your GPU is spending 99% of its time recalculating math it already did 1,999 steps ago.  
+- To fix this, we introduce the single most critical data structure in modern LLM inference: **The Key-Value (KV) Cache**. Instead of recomputing the past, we save the $K$ and $V$ tensors generated during the Prefill phase, store them in GPU memory, and simply concatenate the new token's Key and Value at every decode step. We trade memory capacity to buy back computational speed.
 
 ![](../assets/kv_cache.png)
 
 ![](../assets/kv_cache_mem_size.png)
 
+
+
 - How does KV cache help
 #TODO - explain + show the concept
-#TODO - move all example below to appendix? [appendix_a](appendixA_kvCache.md)
-        - $$\text{KV Cache Bytes} = 2 \times b \times s \times l \times h_{kv} \times d_h \times P$$
-            Where: 
-            - $2$: Accounts for storing both Key ($K$) and Value ($V$) matrices.
-            - $b$: Batch size (number of parallel concurrent requests).
-            - $s$: Sequence length (total tokens in context + generation).
-            - $l$: Number of hidden layers.
-            - $h_{kv}$: Number of Key/Value heads per layer.
-            - $d_h$: Dimension per head ($d_{\text{head}}$).
-            - $P$: Precision size in bytes ($P = 2$ bytes for FP16/BF16, $P = 1$ byte for INT8/FP8).
-            - Reference Architecture: Llama-3 70B Benchmark
-                - Layers ($l$): 80
-                - Query Heads ($h_q$): 64
-                - Head Dimension ($d_h$): 128
-                - Precision ($P$): 2 bytes (BF16)
-                - Context Length ($s$): 8,192 tokens
-                - Batch Size ($b$): 16 concurrent sequences
+
+- $$\text{KV Cache Bytes} = 2 \times b \times s \times l \times h_{kv} \times d_h \times P$$
+    Where: 
+    - $2$: Accounts for storing both Key ($K$) and Value ($V$) matrices.
+    - $b$: Batch size (number of parallel concurrent requests).
+    - $s$: Sequence length (total tokens in context + generation).
+    - $l$: Number of hidden layers.
+    - $h_{kv}$: Number of Key/Value heads per layer.
+    - $d_h$: Dimension per head ($d_{\text{head}}$).
+    - $P$: Precision size in bytes ($P = 2$ bytes for FP16/BF16, $P = 1$ byte for INT8/FP8).
+    - Reference Architecture: Llama-3 70B Benchmark
+        - Layers ($l$): 80
+        - Query Heads ($h_q$): 64
+        - Head Dimension ($d_h$): 128
+        - Precision ($P$): 2 bytes (BF16)
+        - Context Length ($s$): 8,192 tokens
+        - Batch Size ($b$): 16 concurrent sequences
     - Speed improvement
     - Demo pt.1 - #TODO
 - What does it cost?
@@ -330,37 +321,51 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 
 
 ## 7. Memory Optimization Techniques:
-- Useful reference: 
-    - https://www.youtube.com/watch?v=o68RRGxAtDo
-    - https://www.youtube.com/watch?v=_pWigIleZNs
 
-### Multi-Query Attention
+### Multi-Query Attention (2019)
 ![](../assets/mqa.jpg)
-#TODO - expand
+- Uses a single, shared key for all queries. Afterwards, attention scores are scaled and softmax'd, multiplied by the values and concatenated back - same process as MHA.
+- This means that the shared key matrix is reposnible for organizing the shared representation space, where different queries can separate the relationships learned by different heads.
+- Achieves a 7x speedup in inference time and only 0.3 degradation in perplexity metric (LM benchmark).
 
 ### Grouped-Query Attention
 ![](../assets/gqa.jpg)
-#TODO - expand
+- Defines a sub-group of queries that share keys, controlling the trade-off between speed and quality.
+- In a way, GQA serves as the spectrum between MQA (if #subgroups = H) or vanilla MHA (if #subgroups = 1).
 
 ![](../assets/attn_sbs.jpg)
 
+- Performance: MHA has the best performance, but is the slowest. MQA is fast but also the worst-performing method, while GQA achieves a minor reduction in quality while achieving the same speedup as MQA.
+
 ![](../assets/attn_performance.jpg)
+
+For a case of 64 attention heads, the GQA paper found splitting to 8 sub-groups optimal - very little computation overhead with very little loss in quality (not shown here)
+![](../assets/gqa_subgroup_selection.png)
 
 ![](../assets/llms_with_gqa.jpg)
 
-- Should mention?: training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA (by mean-pooling K-projections within groups) and finally training for a few steps more. Mean pooling proved better than taking the first key or taking a randomly-selected key from the group.
+- Sidenote: training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA (by mean-pooling K-projections within groups) and finally training for a few steps more. Mean pooling proved better than taking the first key or taking a randomly-selected key from the group.
 
 ### DeepSeek improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention) #TODO
 - MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
 
-#### Paged Attention? #TODO
+<!-- ~![](../assets/full_kv_cache_reduction.png) -->
+
+
+[KV-cache Memory saving examples: Llama-3 70B Benchmark](appendixA_kvCache.md)
+
+
+#### Paged Attention (optional)
 - Problem: Traditional KV cache allocation requires contiguous memory blocks in VRAM per request, leading to severe virtual memory fragmentation (up to 60-80% memory waste).
 
 - Solution: Operates like virtual memory paging in operating systems. It splits the KV Cache into fixed-size physical memory blocks (e.g., 16 tokens per block) allocated dynamically via a lookup page table.
 
 - Impact: Eliminates memory fragmentation, enabling significantly higher batch sizes on fixed GPU hardware.
 
-### Flash Attention? #TODO
+![](../assets/paged_attention.png)
+
+
+### Flash Attention (optional) #TODO
 - https://www.youtube.com/watch?v=RcFrRqcV4ZA
 
 - The Problem: Standard attention computes $A = \text{softmax}(QK^T / \sqrt{d})V$. Storing that intermediate $N \times N$ attention matrix $A$ in High Bandwidth Memory (HBM) creates an $O(N^2)$ memory footprint and makes attention memory-bandwidth bound rather than compute-bound.
@@ -393,12 +398,18 @@ And PagedAttention eliminated VRAM fragmentation using operating system-style me
 ```
 
 # References:
-#TODO
-
-SwiGLU: 
-    https://www.youtube.com/watch?v=2FaI2Fen1mQ
-    https://www.youtube.com/watch?v=CXqx5LDOfs4
-MLA:
-    https://www.youtube.com/watch?v=0VLAoVGf_74 
-General LLM's: 
-    https://www.youtube.com/watch?v=BprirYymXrg
+#TODO  
+SwiGLU:   
+    https://www.youtube.com/watch?v=2FaI2Fen1mQ  
+    https://www.youtube.com/watch?v=CXqx5LDOfs4  
+MQA, GQA:
+    https://www.youtube.com/watch?v=o68RRGxAtDo
+    https://www.youtube.com/watch?v=_pWigIleZNs
+MLA:  
+    https://www.youtube.com/watch?v=0VLAoVGf_74   
+General LLM's:   
+    https://www.youtube.com/watch?v=BprirYymXrg  
+KV Cache:
+    https://www.youtube.com/watch?v=7OrMFn86PlM
+    https://www.youtube.com/watch?v=RUlQmkFY4F8
+    https://www.youtube.com/watch?v=gpp57x_z_Jg

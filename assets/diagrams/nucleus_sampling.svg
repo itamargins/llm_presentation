@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 600" width="700" height="600" font-family="Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="arrow-nucleus" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#E05315"/>
+    </marker>
+  </defs>
+  <g font-size="15" text-anchor="middle">
+    <!-- main column -->
+    <g fill="#F2EEFC" stroke="#5528CC" stroke-width="1.5">
+      <rect x="10" y="10" width="380" height="55" rx="6"/>
+      <rect x="10" y="95" width="380" height="55" rx="6"/>
+      <rect x="10" y="180" width="380" height="55" rx="6"/>
+      <rect x="10" y="265" width="380" height="55" rx="6"/>
+      <rect x="10" y="350" width="380" height="55" rx="6"/>
+      <rect x="10" y="435" width="380" height="55" rx="6"/>
+      <rect x="10" y="520" width="380" height="55" rx="6"/>
+    </g>
+    <g fill="#222222">
+      <text x="200" y="43">Raw Logits  z&#8348;</text>
+      <text x="200" y="128">1. Temperature Scaling  (z&#8348; / T)</text>
+      <text x="200" y="213">2. Softmax Probability Distribution  P</text>
+      <text x="200" y="298">3. Sort Probabilities Descending</text>
+      <text x="200" y="383">4. Truncate Cumulative Sum &#8804; p</text>
+      <text x="200" y="468">5. Renormalize Remaining Tokens</text>
+      <text x="200" y="553">6. Categorical Sampling</text>
+    </g>
+    <!-- side box: top-p threshold, merges into step 4 -->
+    <g fill="#FBEFE9" stroke="#E05315" stroke-width="1.5">
+      <rect x="440" y="350" width="240" height="55" rx="6"/>
+    </g>
+    <g fill="#222222">
+      <text x="560" y="373">Top-p Threshold</text>
+      <text x="560" y="393" font-size="13">(e.g., p = 0.9)</text>
+    </g>
+  </g>
+  <g stroke="#E05315" stroke-width="2" marker-end="url(#arrow-nucleus)">
+    <line x1="200" y1="65" x2="200" y2="93"/>
+    <line x1="200" y1="150" x2="200" y2="178"/>
+    <line x1="200" y1="235" x2="200" y2="263"/>
+    <line x1="200" y1="320" x2="200" y2="348"/>
+    <line x1="200" y1="405" x2="200" y2="433"/>
+    <line x1="200" y1="490" x2="200" y2="518"/>
+    <line x1="440" y1="377" x2="392" y2="377"/>
+  </g>
+</svg>

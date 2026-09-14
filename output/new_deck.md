@@ -17,6 +17,12 @@ section {
 	font-size: 22px;
 	line-height: 1.24;
 }
+/* Keep content-slide titles at a fixed top baseline. */
+section:not(.section-header):not(.cover) {
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+}
 section h1,
 section h2,
 section h3,
@@ -38,8 +44,8 @@ section h3 {
 	margin-bottom: 0.25em;
 }
 section h4 {
-	font-size: 0.95em !important;
-	margin-bottom: 0.2em;
+	font-size: 1.04em !important;
+	margin-bottom: 0.24em;
 }
 /* Remove the orange corner bracket coming from theme h2 pseudo-elements. */
 section h2::before,
@@ -73,6 +79,65 @@ section.section-header h1,
 section.section-header h2,
 section.section-header h3 {
 	margin: 0;
+}
+section.chapter-roadmap {
+	justify-content: center;
+}
+section.chapter-roadmap h3 {
+	font-size: 1.9em !important;
+	margin-bottom: 0.5em;
+}
+section.chapter-roadmap ol {
+	font-size: 1.45em;
+	line-height: 1.4;
+	margin: 0;
+	padding-left: 1.25em;
+}
+section.chapter-roadmap li {
+	margin: 0.2em 0;
+}
+section.spacious:not(.section-header):not(.cover) {
+	font-size: 1.2em;
+	line-height: 1.28;
+}
+section.spacious h2 {
+	font-size: 1.66em !important;
+	margin-bottom: 0.42em;
+}
+section.spacious h3 {
+	font-size: 1.4em !important;
+	margin-bottom: 0.34em;
+}
+section.spacious h4 {
+	font-size: 1.22em !important;
+	margin-bottom: 0.3em;
+}
+section.spacious p,
+section.spacious li,
+section.spacious blockquote {
+	font-size: 1.1em;
+}
+section.spacious .fig img {
+	max-height: 56vh;
+}
+section.cover {
+	position: relative;
+	text-align: center;
+}
+section.cover h1 {
+	font-size: 2.65em !important;
+	margin-top: 0.35em;
+	margin-bottom: 0.4em;
+}
+section.cover .cover-subtitle {
+	position: absolute;
+	left: 64px;
+	right: 64px;
+	bottom: 22px;
+	font-size: 0.86em;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	color: #555555;
 }
 section.cover .fig img {
 	max-height: 44vh;
@@ -121,26 +186,30 @@ table { font-size: 0.55em; }
 
 </div>
 
+<div class="cover-subtitle">MP Seminar - Sep-15 2026</div>
+
 ---
 
-### Context
+<!-- _class: chapter-roadmap -->
 
-> In the last lecture, we saw how Self-Attention and Multi-Head Attention allow an embedded token to look at other tokens through a single, or multiple independent projection subspaces.
->
-<div class="fig">
+### Chapter Roadmap
 
-![w:520](../assets/sa.png)
-
-</div>
->
->
-> **How do we take those outputs, recombine them, push them through a deep network without destroying gradients, and scale this to an 8-billion parameter model that actually generates text?**
->
+1. Attention -> Transformer Block
+2. Encoder-Decoder Architecture and Variants
+3. Language Modeling and Generation
+4. LLM Execution Phases
+5. KV Cache
+6. The Context Window ($C_{\text{max}}$)
+7. Memory Optimization Techniques
 
 ---
 
 <!-- _class: section-header -->
 ## 1. Attention -> Transformer Block
+
+> In the last lecture, we saw how Self-Attention and Multi-Head Attention allow an embedded token to look at other tokens through a single, or multiple independent projection subspaces.
+>
+> How do we take those outputs, recombine them, push them through a deep network without destroying gradients, and scale this to an 8-billion parameter model that actually generates text?
 
 ---
 
@@ -159,58 +228,59 @@ So, a new linear projection (termed "output", $w_o$) is added.
 
 ---
 
-### Mathematical Formulation
+### Output Projection $W^O$: Formula and Worked Example
+
+<div class="columns">
+<div>
 
 The concatenated head representations are projected back into the residual space using the output projection matrix $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$:
 
-$$\text{MHA}(Q, K, V) = \text{Concat}(\text{head}_1, \text{head}_2, \dots, \text{head}_h) W^O$$
-
-Where:
+$$\text{MHA}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O$$
 
 - $\text{Concat}(\dots) \in \mathbb{R}^{B \times L \times d_{\text{model}}}$
 - $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$
 - Output Tensor $\in \mathbb{R}^{B \times L \times d_{\text{model}}}$
 
----
+</div>
+<div>
 
-### Concrete Tensor Example
-
-Consider a Llama 3 8B configuration:
-
-- Hidden dimension $d_{\text{model}} = 4096$
-- Query heads $h = 32$
-- Per-head dimension $d_k = 4096 / 32 = 128$
-- Batch size $B = 2$, Sequence length $L = 512$
+Consider a Llama 3 8B configuration ($d_{\text{model}}=4096$, $h=32$, $d_k=128$, $B=2$, $L=512$):
 
 1. Each head outputs $[2, 512, 128]$.
-2. Concatenating across 32 heads yields $[2, 512, 32 \times 128] = [2, 512, 4096]$.
-3. Multiplying by $W^O \in \mathbb{R}^{4096 \times 4096}$ mixes feature dimensions across all heads, outputting a tensor of $[2, 512, 4096]$ ready to be added back to the residual stream.
+2. Concatenating across 32 heads yields $[2, 512, 4096]$.
+3. Multiplying by $W^O \in \mathbb{R}^{4096 \times 4096}$ mixes feature dimensions across all heads, outputting $[2, 512, 4096]$ ready to be added back to the residual stream.
+
+</div>
+</div>
 
 ---
 
-### Residual Connections
+### Residual Connections Enable Direct Gradient Flow
 
-In early deep networks, layers transformed representations sequentially ($x^{(l)} = f(x^{(l-1)})$).
+<div class="columns">
+<div>
 
-In ultra-deep architectures (80+ layers), this creates severe vanishing/exploding gradient problems and forces each layer to re-learn identity mappings if no transformation is needed.
+In early deep networks, layers transformed representations sequentially ($x^{(l)} = f(x^{(l-1)})$), which causes vanishing/exploding gradients in ultra-deep (80+ layer) architectures.
 
 The Transformer adopts a **residual stream view**:
 
 $$x^{(l)} = x^{(l-1)} + \text{Attention}(x^{(l-1)}) + \text{FFN}(x^{(l-1)})$$
 
----
-
-### Mathematical & Gradient Impact
-
-Unrolling the recursion over $L$ layers yields:
+Unrolling over $L$ layers:
 
 $$x^{(L)} = x^{(0)} + \sum_{l=1}^{L} \Delta x^{(l)}$$
 
-During backpropagation, the gradient of the loss $\mathcal{L}$ with respect to the input state $x^{(0)}$ is:
+</div>
+<div>
 
-$$\frac{\partial \mathcal{L}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \frac{\partial x^{(L)}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \left( I + \sum_{l=1}^{L} \frac{\partial \Delta x^{(l)}}{\partial x^{(0)}} \right)$$
+During backpropagation, the gradient of the loss $\mathcal{L}$ with respect to $x^{(0)}$ is:
+
+$$\frac{\partial \mathcal{L}}{\partial x^{(0)}} = \frac{\partial \mathcal{L}}{\partial x^{(L)}} \left( I + \sum_{l=1}^{L} \frac{\partial \Delta x^{(l)}}{\partial x^{(0)}} \right)$$
 
 The identity term $I$ guarantees that gradients flow backwards through all $L$ layers directly without decaying, eliminating the vanishing gradient wall regardless of depth.
+
+</div>
+</div>
 
 ---
 
@@ -228,7 +298,7 @@ $$\text{LayerNorm}(x) = \gamma \odot \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} 
 
 ---
 
-#### RMSNorm (Root Mean Square Normalization)
+### RMSNorm (Root Mean Square Normalization)
 
 Modern LLMs (Llama 3, Mistral, Qwen) replace standard LayerNorm with **RMSNorm** to improve computational speed without sacrificing variance stabilization.
 
@@ -246,7 +316,7 @@ Where:
 
 ---
 
-#### Evolution: Post-LN vs. Pre-LN
+### Evolution: Post-LN vs. Pre-LN
 
 - **Post-LayerNorm (Original Transformer):**
 
@@ -264,15 +334,21 @@ Normalization is placed exclusively on the *branch* leading into the sub-layer. 
 
 ---
 
+<!-- _class: spacious -->
+
+### Post-LN vs. Pre-LN: Visual Comparison
+
 <div class="fig">
 
-![w:540](../assets/pre_post_ln.png)
+![w:620](../assets/pre_post_ln.png)
 
 </div>
 
 <center>(a) - Post-LN, (b) - Pre-LN</center>
 
 ---
+
+<!-- _class: spacious -->
 
 ### FFN
 
@@ -284,48 +360,40 @@ Normalization is placed exclusively on the *branch* leading into the sub-layer. 
 
 ---
 
-### SwiGLU Activation
+### SwiGLU Gates Features Using a Swish-Activated Branch
 
-- GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are "data-dependent dropout" (usually derived by using $x*P(x)$ (Gaussian CDF and Sigmoid in this case)).
+<div class="columns">
+<div>
+
+GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are "data-dependent dropout" (usually derived by using $x*P(x)$, Gaussian CDF and Sigmoid respectively).
 
 <div class="fig">
 
-![w:620](../assets/activations.png)
+![w:420](../assets/activations.png)
 
 </div>
 
-- Instead of passing hidden states through a single linear transformation followed by an activation, SwiGLU projects the input vector $x$ into two separate linear paths: a main path and a gating path. The gating path is passed through the Swish activation function ($\text{Swish}_\beta(x) = x \cdot \sigma(\beta x)$) and element-wise multiplied ($\otimes$) with the main path projection before a final linear projection maps it back to the hidden dimension $d_{\text{model}}$.
-
-```mermaid
-graph TD
-	IN["Input Vector x [d_model]"] --> W1["Linear Gate (W_1) [d_model -> d_ffn]"]
-	IN --> W2["Linear Up (W_2)   [d_model -> d_ffn]"]
-
-	W1 --> SW["Swish Activation
-	($$\text{Swish}_\beta(x) = x \cdot \sigma(\beta x)$$)"]
-
-	SW --> MUL["Element-wise Multiplication (⊗) - Gating"]
-	W2 --> MUL
-
-	MUL --> W3["Linear Down (W_3)    [d_ffn -> d_model]"]
-	W3 --> OUT["Output Vector [d_model]"]
-```
+</div>
+<div>
 
 <div class="fig">
 
-![w:520](../assets/swiglu.jpg)
+![w:420](../assets/swiglu.jpg)
 
 </div>
 
-<div class="fig">
+- Two linear projections produce an up branch and a gate branch.
+- The gate branch applies Swish and modulates the up branch via element-wise multiplication.
+- A final down projection maps the gated representation back to $d_{\text{model}}$.
 
-![w:170](../assets/guessilldie.jpg)
-
+</div>
 </div>
 
 ---
 
-#### Parameter-Matching Strategy for SwiGLU
+<!-- _class: spacious -->
+
+### Parameter Matching Keeps SwiGLU Cost Equal to Standard FFN
 
 Standard ReLU FFN uses 2 matrices ($W_{\text{gate/up}}, W_{\text{down}}$) with intermediate dimension $d_{\text{ff}} = 4 d_{\text{model}}$, yielding $2 \times 4 d_{\text{model}}^2 = 8 d_{\text{model}}^2$ parameters.
 
@@ -337,22 +405,20 @@ In Llama 3 8B: $d_{\text{model}} = 4096 \implies d_{\text{ff}} = 14336 \approx \
 
 ---
 
-### Result: Complete Transformer Block
+<!-- _class: spacious -->
 
-TODO: add text + diagram.
+### Complete Transformer Model = Embedding + $N$ Blocks + LM Head
 
-- **Terminology -**
-	- *"Transformer Block" - Each one of the Nx modules*
-	- *"Transformer Model" - A stack of the Transformer Blocks with an embedding layer and output head.*
+$$x^{(l+1)} = x^{(l)} + \text{Attn}(\text{RMSNorm}(x^{(l)})) + \text{SwiGLU}(\text{RMSNorm}(x^{(l)}))$$
+
+- A Transformer block is one residual update unit: normalization, sequence mixing, and feature transformation.
+- A Transformer model stacks these blocks after token embedding and before the LM head logits projection.
+- Depth lets contextual mixing and feature retrieval accumulate before next-token prediction.
 
 ---
 
 <!-- _class: section-header -->
-## Encoder-Decoder architecture and variants
-
----
-
-TODO - review and visuals
+## 2. Encoder-Decoder Architecture and Variants
 
 > Now we have a complete, fully functional Transformer block — with RMSNorm maintaining stability, Multi-Head Attention mixing sequence tokens, and SwiGLU FFN retrieving features.
 >
@@ -364,11 +430,29 @@ TODO - review and visuals
 
 ---
 
-### Encoder-Only (BERT)
+### Encoder-Only vs. Decoder-Only: Attention Masking Sets the Use Case
+
+<div class="columns">
+<div>
+
+**Encoder-Only (BERT)**
 
 - Attention Mechanism: Unmasked, full Bi-Directional Self-Attention. Every token at position $i$ can attend to all other tokens at positions $j \in [1, L]$ (both past and future).
 - Objective: Masked Language Modeling (MLM) or sequence classification.
 - Primary Use Case: Producing rich contextual embeddings, feature extraction, passage reranking, and token classification.
+
+</div>
+<div>
+
+**Decoder-Only (GPT/Llama)**
+
+- Attention Mechanism: Causal (Masked) Self-Attention. Token $i$ can attend only to past and current positions $j \le i$.
+- No Cross-Attention: Eliminates the Encoder-Decoder attention sub-layer entirely. Each block contains exactly two sub-layers (Causal MHA + FFN).
+- Objective: Autoregressive Next-Token Prediction ($P(x_t \mid x_{<t})$).
+- Primary Use Case: General-purpose LLMs, instruction following, and open-ended text generation.
+
+</div>
+</div>
 
 ---
 
@@ -381,15 +465,6 @@ TODO - review and visuals
 		- In the next step, the decoder receives "<START> T1" (its own output) and the cached K,V from the encoder, to predict T2.
 		- This goes on until the decoder itself predicts <END>.
 	- The Encoder is essentially the "condition" upon which the decoder makes the prediction.
-
----
-
-### Decoder-Only (GPT/Llama)
-
-- Attention Mechanism: Causal (Masked) Self-Attention. Token $i$ can attend only to past and current positions $j \le i$.
-- No Cross-Attention: Eliminates the Encoder-Decoder attention sub-layer entirely. Each block contains exactly two sub-layers (Causal MHA + FFN).
-- Objective: Autoregressive Next-Token Prediction ($P(x_t \mid x_{<t})$).
-- Primary Use Case: General-purpose Large Language Models (LLMs), instruction following, and open-ended text generation.
 
 ---
 
@@ -413,15 +488,15 @@ When $M_{i,j} = -\infty$, $\exp(-\infty) = 0$, completely blocking information l
 ---
 
 <!-- _class: section-header -->
-## Language Modeling and Generation #TODO - bridge text
-
----
+## 3. Language Modeling and Generation
 
 > How do we bridge the gap between this continuous hidden vector and a discrete token chosen from a vocabulary of 128,000 words?
 >
 > That is the job of the Language Modeling Head and the Decoding Pipeline.
 
 ---
+
+<!-- _class: spacious -->
 
 ### LM Head (Unembedding)
 
@@ -433,17 +508,15 @@ To turn these representations into token predictions, the final vector at the la
 
 ### LM Head Pipeline
 
-```mermaid
-graph TD
-		A["Final Hidden Vector xₜ⁽ᴸ⁾ [d_model]"] --> B["RMSNorm"]
-		B --> C["Linear LM Head (W_vocab) [d_model → |V|]"]
-		C --> D["Raw Logits zₜ [|V|]"]
-		D --> E["Temperature Scaling (zₜ / T)"]
-		E --> F["Softmax Normalization"]
-		F --> G["Next-Token Probabilities P(xₜ₊₁)"]
-```
+<div class="fig">
+
+![h:520](../assets/diagrams/lm_head_unembedding_pipeline.svg)
+
+</div>
 
 ---
+
+<!-- _class: spacious -->
 
 ### From Logits to Probabilities - Softmax & Temperature
 
@@ -453,7 +526,7 @@ $$P(x_{t+1} = i \mid x_{1:t}) = \frac{\exp(z_{t, i} / T)}{\sum_{j=1}^{|V|} \exp(
 
 ---
 
-#### Mathematical Behavior of Temperature $T$
+### Mathematical Behavior of Temperature $T$
 
 - **$T \to 0$ (Greedy / Deterministic):**
 	- The maximum logit dominates completely ($P(x_{t+1} = \arg\max z_t) \to 1$).
@@ -470,35 +543,30 @@ $$P(x_{t+1} = i \mid x_{1:t}) = \frac{\exp(z_{t, i} / T)}{\sum_{j=1}^{|V|} \exp(
 
 </div>
 
-TODO: why would we use this?
-
 ---
 
 ### Temperature + Nucleus (Top-$p$) Sampling Mechanics
 
 Nucleus Sampling dynamically adapts the candidate pool based on model confidence:
 
-```mermaid
-graph TD
-		A["Raw Logits zₜ"] --> B["1. Temperature Scaling (zₜ / T)"]
-		B --> C["2. Softmax Probability Distribution P"]
-		C --> D["3. Sort Probabilities Descending"]
-		E["Top-p Threshold (e.g., p=0.9)"] --> F["4. Truncate Cumulative Sum ≤ p"]
-		D --> F
-		F --> G["5. Renormalize Remaining Tokens"]
-		G --> H["6. Categorical Sampling"]
-```
+<div class="fig">
+
+![h:360](../assets/diagrams/nucleus_sampling.svg)
+
+</div>
 
 Dynamic Behavior: When the model is uncertain (e.g., creative writing), probabilities are distributed broadly, so Nucleus sampling keeps many tokens ($k$ is large). When the model is very confident (e.g., factual queries), $P(i_1)$ alone might be $0.92$, so for $p=0.9$, $k=1$ and it automatically acts like greedy decoding.
 
 ---
 
 <!-- _class: section-header -->
-## LLM Execution Phases
+## 4. LLM Execution Phases
+
+During inference, a Decoder-Only LLM executes in two distinct operational phases that exhibit radically different computational bottlenecks and hardware performance profiles.
 
 ---
 
-During inference, a Decoder-Only LLM executes in two distinct operational phases that exhibit radically different computational bottlenecks and hardware performance profiles.
+<!-- _class: spacious -->
 
 ### Prefill
 
@@ -506,6 +574,8 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 - This is done by Matrix-Matrix multiplications (GEMM) of shape $[B, L_{\text{prompt}}, d_{\text{model}}] \times [d_{\text{model}}, d_{\text{out}}]$.
 
 ---
+
+<!-- _class: spacious -->
 
 ### Decode
 
@@ -524,15 +594,8 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 
 ---
 
-## KV Cache:
-
-Useful References:
-
-- https://www.youtube.com/watch?v=7OrMFn86PlM
-- https://www.youtube.com/watch?v=RUlQmkFY4F8
-- https://www.youtube.com/watch?v=gpp57x_z_Jg
-
-- Explain the problem.
+<!-- _class: section-header -->
+## 5. KV Cache
 
 > Now, ask yourself a critical question: What happens to the Attention calculation when we generate token $N+1$?
 >
@@ -542,14 +605,22 @@ Useful References:
 >
 > To fix this, we introduce the single most critical data structure in modern LLM inference: The Key-Value (KV) Cache. Instead of recomputing the past, we save the $K$ and $V$ tensors generated during the Prefill phase, store them in GPU memory, and simply concatenate the new token's Key and Value at every decode step. We trade memory capacity to buy back computational speed.
 
-- How does KV cache help.
-
-TODO: explain + show the concept.
 ---
 
-## KV Cache: Formula and Variables
+<!-- _class: spacious -->
 
-TODO: move all example below to appendix? [appendix_a](appendixA_kvCache.md)
+### Useful References for Chapter 5
+
+- https://www.youtube.com/watch?v=7OrMFn86PlM
+- https://www.youtube.com/watch?v=RUlQmkFY4F8
+- https://www.youtube.com/watch?v=gpp57x_z_Jg
+
+- Explain the problem.
+- How does KV cache help.
+
+---
+
+### KV Cache: Formula and Variables
 
 $$\text{KV Cache Bytes} = 2 \times b \times s \times l \times h_{kv} \times d_h \times P$$
 
@@ -565,7 +636,7 @@ Where:
 
 ---
 
-## KV Cache: Reference Architecture (Llama-3 70B)
+### KV Cache: Reference Architecture (Llama-3 70B)
 
 - Layers ($l$): 80
 - Query Heads ($h_q$): 64
@@ -575,15 +646,12 @@ Where:
 - Batch Size ($b$): 16 concurrent sequences
 
 - Speed improvement.
-- Demo pt.1 - TODO.
 - What does it cost?
-- Demo pt.2 - TODO.
 
 ---
 
-## The Context Window ($C_{\text{max}}$)
-
-#TODO - context window??
+<!-- _class: section-header -->
+## 6. The Context Window ($C_{\text{max}}$)
 
 > Every model provider advertises massive context lengths today—32k, 128k, 1M, or even 2M tokens. But context length isn't just a setting you toggle in a config file. It is a strict physical boundary bounded by three distinct engineering brick walls:
 >
@@ -596,11 +664,15 @@ Where:
 ---
 
 <!-- _class: section-header -->
-## Memory Optimization Techniques:
+## 7. Memory Optimization Techniques
 
 ---
 
-Useful references:
+<!-- _class: spacious -->
+
+### Useful References for Chapter 7
+
+- Deep dives on KV-cache and memory-aware attention kernels.
 
 - https://www.youtube.com/watch?v=o68RRGxAtDo
 - https://www.youtube.com/watch?v=_pWigIleZNs
@@ -615,8 +687,6 @@ Useful references:
 
 </div>
 
-TODO: expand.
-
 ---
 
 ### Grouped-Query Attention
@@ -627,9 +697,9 @@ TODO: expand.
 
 </div>
 
-TODO: expand.
-
 ---
+
+### MHA vs. MQA vs. GQA
 
 <div class="fig">
 
@@ -639,35 +709,25 @@ TODO: expand.
 
 ---
 
-<div class="fig">
-
-![w:760](../assets/attn_performance.jpg)
-
-</div>
-
----
-
-<div class="fig">
-
-![w:760](../assets/llms_with_gqa.jpg)
-
-</div>
-
----
+<!-- _class: spacious -->
 
 ### Training Note (MQA/GQA)
 
-Should mention?: training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA (by mean-pooling K-projections within groups) and finally training for a few steps more. Mean pooling proved better than taking the first key or taking a randomly-selected key from the group.
+- Two linear projections produce an "up" branch and a "gate" branch.
+- The gate branch applies Swish and modulates the up branch via element-wise multiplication.
+- A final down projection maps the gated representation back to $d_{\text{model}}$.
 
 ---
 
-### DeepSeek improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention) #TODO
+<!-- _class: spacious -->
+
+### DeepSeek improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention)
 
 - MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
 
 ---
 
-#### Paged Attention? #TODO
+### Paged Attention?
 
 - Problem: Traditional KV cache allocation requires contiguous memory blocks in VRAM per request, leading to severe virtual memory fragmentation (up to 60-80% memory waste).
 - Solution: Operates like virtual memory paging in operating systems. It splits the KV Cache into fixed-size physical memory blocks (e.g., 16 tokens per block) allocated dynamically via a lookup page table.
@@ -675,7 +735,7 @@ Should mention?: training with MQA/GQA from scratch is unstable, so authors prop
 
 ---
 
-### Flash Attention? #TODO
+### Flash Attention?
 
 Reference: https://www.youtube.com/watch?v=RcFrRqcV4ZA
 
@@ -692,9 +752,11 @@ Reference: https://www.youtube.com/watch?v=RcFrRqcV4ZA
 ---
 
 <!-- _class: section-header -->
-## More Cool stuff
+## More Cool Stuff
 
 ---
+
+<!-- _class: spacious -->
 
 ### https://hfviewer.com/ - architectures and glossary
 
@@ -705,27 +767,32 @@ Reference: https://www.youtube.com/watch?v=RcFrRqcV4ZA
 
 ---
 
-```
-We started this lecture with a single, isolated Multi-Head Attention mechanism floating in space. Step by step, we built a modern Transformer block-adding RMSNorm to stabilize activation variance, Residual Connections to clear the gradient highway, and SwiGLU FFNs to store per-token factual memory.
+<!-- _class: spacious -->
 
-We saw how stacking these blocks gives us the Decoder-Only architecture, and how its final hidden states are mapped through the LM Head, modulated by Temperature, and sampled via Nucleus (Top-$p$) selection to generate text.
+### End-to-End Takeaway: Architecture Meets Hardware Constraints
 
-But most importantly, we looked under the hood at the physical hardware reality. We learned that LLM inference is split into two distinct regimes: a compute-bound Prefill phase that ingests the prompt in parallel, and a memory-bandwidth-bound Decode phase that generates text token-by-token.
-
-To prevent an $O(L^2)$ computational explosion during decode, we introduced the KV Cache. But as we calculated, storing standard FP16 KV Cache for long context quickly consumes more VRAM than the model weights themselves.
-
-Finally, in Chapter 7, we saw how the field solved this memory wall:GQA reduced KV head counts by grouping queries to share keys and values.
-
-DeepSeek MLA compressed key-value states into low-rank latent vectors that absorb directly into the Query projections.FlashAttention tiled GPU SRAM memory to bypass the slow HBM bottleneck.
-
-And PagedAttention eliminated VRAM fragmentation using operating system-style memory paging.With these architectural and kernel-level optimizations, we transformed what was an $O(L^2)$ computational and memory wall into a lean, production-ready inference pipeline capable of processing millions of tokens.
-```
+- We built a modern decoder block from RMSNorm, residual paths, attention, and SwiGLU.
+- Stacking blocks gives a decoder-only LM: hidden states become logits, then sampled tokens.
+- Inference has two distinct phases: Prefill is compute-bound; Decode is memory-bandwidth-bound.
+- The practical bottleneck is not only FLOPs, but also memory movement and cache layout.
 
 ---
 
-## References:
+<!-- _class: spacious -->
 
-TODO
+### Memory-Aware Kernels Turn the $O(L^2)$ Wall into Throughput
+
+- GQA reduces KV memory by sharing keys/values across query groups.
+- MLA compresses KV information into low-rank latent states.
+- FlashAttention tiles computation in SRAM and avoids writing full $N \times N$ attention maps to HBM.
+- PagedAttention removes VRAM fragmentation through fixed-size block paging.
+- Together, these changes make long-context inference production-feasible.
+
+---
+
+<!-- _class: spacious -->
+
+### References
 
 SwiGLU:
 	https://www.youtube.com/watch?v=2FaI2Fen1mQ

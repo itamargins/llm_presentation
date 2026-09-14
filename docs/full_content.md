@@ -348,8 +348,10 @@ For a case of 64 attention heads, the GQA paper found splitting to 8 sub-groups 
 
 - Sidenote: training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA (by mean-pooling K-projections within groups) and finally training for a few steps more. Mean pooling proved better than taking the first key or taking a randomly-selected key from the group.
 
-### DeepSeek improvement??? (https://www.youtube.com/watch?v=9y-0rpEnPrg) - MLA? (Latent Attention) #TODO
-- MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
+### MLA (Latent Attention)
+- Instead of generating and caching distinct Key ($K$) and Value ($V$) tensors for each head during autoregressive decoding, MLA projects the hidden state $h_t \in \mathbb{R}^{d_{\text{model}}}$ into a single, low-rank compressed latent vector $c_t^{KV} \in \mathbb{R}^{d_c}$ (where the compression dimension $d_c \ll h_q \times d_h$):$$c_t^{KV} = W^{DKV} h_t$$
+- During inference, only this low-rank latent vector $c_t^{KV}$ is stored in the GPU KV Cache.
+- When computing attention for a token, the key and value projections are up-projected on the fly using weight matrices $W^{UK}$ and $W^{UV}$:$$K_t = W^{UK} c_t^{KV}, \quad V_t = W^{UV} c_t^{KV}$$Because matrix multiplication is associative, the up-projection weight matrix $W^{UK}$ can actually be absorbed into the Query projection matrix ($W^Q$) during inference ($W^{Q'} = W^Q W^{UK}$), meaning the model doesn't even need to expand $c_t^{KV}$ back into full Keys in memory!
 
 <!-- ~![](../assets/full_kv_cache_reduction.png) -->
 

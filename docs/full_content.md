@@ -10,20 +10,26 @@
 <!-- ============================================================================== -->
 
 # **Anatomy of a Real-Life Transformer**
-![](../assets/transformer.png)
-- **Terminology -**
-    - *"Transformer Block" - Each one of the Nx modules*
-    - *"Transformer Model" - A stack of the Transformer Blocks with an embedding layer and output head.*
+<div align="center">
+  <img src="../assets/transformer.png" height="500">
+</div>  
+
+---
+---
+
+> In the last lecture, we saw how Self-Attention and Multi-Head Attention allow an embedded token to look at other tokens through a single, or multiple independent projection subspaces.  
+![](../assets/sa.png)  
+> **How do we take those outputs, recombine them, push them through a deep network without destroying gradients, and scale this to an 8-billion parameter model that actually generates text?**
 
 
-- Useful reference: Letitia - https://www.youtube.com/watch?v=BprirYymXrg
+## 1. Attention -> Transformer Block
+![](../assets/dot_product_mha.webp)
 
+### Output Linear Projection
+- Last time we ended with $h$ separate outputs of shape $[B, L, d_k]$ Simply concatenating MHA's $h$ outputs produces a tensor of shape $[B, L, h \cdot d_k] = [B, L, d_{\text{model}}]$. 
+- However, without a linear projection, information extracted by head $i$ remains trappsed and cannot interact with representations learned by head $j$.
 
-## Attention -> Transformer Block
-After MHA, there is  a projection called W_O that merges the information from the various heads.
-Simply concatenating these $h$ outputs produces a tensor of shape $[B, L, h \cdot d_k] = [B, L, d_{\text{model}}]$. However, without a linear projection:
-1. **Head Isolation:** Information extracted by head $i$ remains trapped in slice $[i \cdot d_k : (i+1) \cdot d_k]$ and cannot interact with representations learned by head $j$.
-2. **Subspace Mixing Deficit:** The model cannot linearly recombine features extracted across different attention perspectives (e.g., combining a syntactic dependency head with a long-range semantic reference head).
+So, a new linear projection (termed "output", $w_o$) is added.
 
 ### Mathematical Formulation
 The concatenated head representations are projected back into the residual space using the output projection matrix $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$:
@@ -46,15 +52,13 @@ Consider a Llama 3 8B configuration:
 2. Concatenating across 32 heads yields $[2, 512, 32 \times 128] = [2, 512, 4096]$.
 3. Multiplying by $W^O \in \mathbb{R}^{4096 \times 4096}$ mixes feature dimensions across all heads, outputting a tensor of $[2, 512, 4096]$ ready to be added back to the residual stream.
 
-### Residual
+### Residual Connections
 In early deep networks, layers transformed representations sequentially ($x^{(l)} = f(x^{(l-1)})$). In ultra-deep architectures (80+ layers), this creates severe vanishing/exploding gradient problems and forces each layer to re-learn identity mappings if no transformation is needed.
 
 
 The Transformer adopts a **residual stream view**:
 
 $$x^{(l)} = x^{(l-1)} + \text{Attention}(x^{(l-1)}) + \text{FFN}(x^{(l-1)})$$
-
-#TODO - add transformer block diagram
 
 ### Mathematical & Gradient Impact
 Unrolling the recursion over $L$ layers yields:
@@ -71,10 +75,28 @@ The identity term $I$ guarantees that gradients flow backwards through all $L$ l
 ### Normalization
 
 #### Rationale: Stabilization of Activation Distributions
-As updates $\Delta x^{(l)}$ are repeatedly added to the residual stream, the variance of the hidden activations scales monotonically with depth ($Var(x^{(l)}) \approx Var(x^{(0)}) + \sum Var(\Delta x)$). Without normalization, deep activations explode, pushing Softmax inputs into saturated zero-gradient regimes.
+- As updates $\Delta x^{(l)}$ are repeatedly added to the residual stream, the variance of the hidden activations scales monotonically with depth ($Var(x^{(l)}) \approx Var(x^{(0)}) + \sum Var(\Delta x)$). Without normalization, deep activations explode, pushing Softmax inputs into saturated zero-gradient regimes.
 
-#TODO - brief LayerNorm explanation
+- BatchNorm fails in sequence models because it relies heavily on batch size and suffers when dealing with variable sequence lengths and padding tokens—which corrupt cross-batch means and variances LayerNorm eliminates batch dependency entirely, providing identical, stable normalization behavior during both training and single-token inference without requiring inter-GPU synchronization during distributed training
 
+- LayerNorm means normalizing per layer in the network. It is regular normalization over the activation outputs in the layer, and includes two additional learnable parameters: $\beta$ and $\gamma$, which are additional bias and scale terms, respectively:
+
+    $$\text{LayerNorm}(x) = \gamma \odot \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta$$
+
+
+#### RMSNorm (Root Mean Square Normalization)
+Modern LLMs (Llama 3, Mistral, Qwen) replace standard LayerNorm with **RMSNorm** to improve computational speed without sacrificing variance stabilization.
+
+Zhang and Sennrich (2019) demonstrated that the primary benefit of LayerNorm comes from scaling stability (rescaling the magnitude of inputs) rather than mean-shifting. Dropping mean-centering reduces memory access overhead and GPU latency while maintaining identical training stability.
+
+Therefore, RMSNorm removes the mean-centering step and the bias parameter $\beta$:
+
+$$\bar{a}_i = \frac{a_i}{\text{RMS}(a)} \odot \gamma_i, \quad \text{where } \text{RMS}(a) = \sqrt{\frac{1}{d} \sum_{i=1}^d a_i^2 + \epsilon}$$
+
+Where:
+* $a \in \mathbb{R}^{d_{\text{model}}}$ is the hidden activation vector for a single token.
+* $\gamma \in \mathbb{R}^{d_{\text{model}}}$ is a learnable scaling parameter.
+* $\epsilon$ is a small constant (e.g., $10^{-5}$) to prevent division by zero.
 
 #### Evolution: Post-LN vs. Pre-LN
 * **Post-LayerNorm (Original Transformer):** 
@@ -89,23 +111,6 @@ As updates $\Delta x^{(l)}$ are repeatedly added to the residual stream, the var
 <center>(a) - Post-LN, (b) - Pre-LN</center>
 
 
-#### RMSNorm (Root Mean Square Normalization) #TODO
-Modern LLMs (Llama 3, Mistral, Qwen) replace standard LayerNorm with **RMSNorm** to improve computational speed without sacrificing variance stabilization.
-
-Standard LayerNorm computes both mean $\mu$ and variance $\sigma^2$:
-
-$$\text{LN}(x) = \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} \odot \gamma + \beta, \quad \text{where } \mu = \frac{1}{d}\sum_{i=1}^d x_i, \; \sigma^2 = \frac{1}{d}\sum_{i=1}^d (x_i - \mu)^2$$
-
-RMSNorm makes an empirical observation: **the scaling invariance of LayerNorm provides stability, while mean-shifting ($\mu$) provides negligible benefit.** 
-
-By assuming a mean of zero, RMSNorm removes the mean-centering step and the bias parameter $\beta$:
-
-$$\bar{a}_i = \frac{a_i}{\text{RMS}(a)} \odot \gamma_i, \quad \text{where } \text{RMS}(a) = \sqrt{\frac{1}{d} \sum_{i=1}^d a_i^2 + \epsilon}$$
-
-Where:
-* $a \in \mathbb{R}^{d_{\text{model}}}$ is the hidden activation vector for a single token.
-* $\gamma \in \mathbb{R}^{d_{\text{model}}}$ is a learnable scaling parameter.
-* $\epsilon$ is a small constant (e.g., $10^{-5}$) to prevent division by zero.
 
 ### FFN 
 
@@ -116,10 +121,26 @@ Where:
     - Row $i$ of $W_2$ aligns closely with the vector  of "Paris".
 
 ### SwiGLU Activation
-- Useful References - 
-    - https://www.youtube.com/watch?v=2FaI2Fen1mQ
-- (These functions help "dropout" in a way that is dependent on the data)
-- GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are sort of a data-dependent dropout. They are derived by using x*p(x), where p(x) can be any CDF (Gaussian and Sigmoid in this case). These two functions are very similar.
+
+- GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are "data-dependent dropout" (usually derived by using x*P(x) (Gaussian CDF and Sigmoid in this case)).
+
+![](../assets/activations.png)
+
+- Instead of passing hidden states through a single linear transformation followed by an activation, SwiGLU projects the input vector $x$ into two separate linear paths: a main path and a gating path. The gating path is passed through the Swish activation function ($\text{Swish}_\beta(x) = x \cdot \sigma(\beta x)$) and element-wise multiplied ($\otimes$) with the main path projection before a final linear projection maps it back to the hidden dimension $d_{\text{model}}$
+```mermaid
+graph TD
+    IN["Input Vector x [d_model]"] --> W1["Linear Gate (W_1) [d_model → d_ffn]"]
+    IN --> W2["Linear Up (W_2)   [d_model → d_ffn]"]
+    
+    W1 --> SW["Swish Activation
+    ($$\text{Swish}_\beta(x) = x \cdot \sigma(\beta x)$$)"]
+    
+    SW --> MUL["Element-wise Multiplication (⊗) - Gating"]
+    W2 --> MUL
+    
+    MUL --> W3["Linear Down (W_3)    [d_ffn → d_model]"]
+    W3 --> OUT["Output Vector [d_model]"]
+```
 
 ![](../assets/swiglu.jpg)
 <div align="center">
@@ -137,11 +158,20 @@ $$3 \times \left( \frac{8}{3} d_{\text{model}} \times d_{\text{model}} \right) =
 In Llama 3 8B: $d_{\text{model}} = 4096 \implies d_{\text{ff}} = 14336 \approx \frac{8}{3} \times 4096$.
 
 
-### Result: Full Transformer Block
+### Result: Complete Transformer Block
+#TODO - add text + diagram
+
+- **Terminology -**
+    - *"Transformer Block" - Each one of the Nx modules*
+    - *"Transformer Model" - A stack of the Transformer Blocks with an embedding layer and output head.*
 
 
-##  Encoder-Decoder architecture and variants
-#TODO 
+##  2. Encoder-Decoder architecture and variants
+# TODO - review and visuals
+> Now we have a complete, fully functional Transformer block — with RMSNorm maintaining stability, Multi-Head Attention mixing sequence tokens, and SwiGLU FFN retrieving features. But a single block sitting on a whiteboard doesn't generate text, translate languages, or extract embeddings.  
+> To turn this block into an actual model, we have to make two fundamental engineering decisions: How do we stack them? and How do we restrict what each token is allowed to see?  
+> Historically, the field split into three distinct paths based on attention masking: models that look everywhere, models that look in two separate stages, and models that strictly look into the past. Let's look at the Encoder, the Decoder, and their hybrid friends.
+
 ### Encoder-Only (BERT)
 - Attention Mechanism: Unmasked, full Bi-Directional Self-Attention. Every token at position $i$ can attend to all other tokens at positions $j \in [1, L]$ (both past and future).
 - Objective: Masked Language Modeling (MLM) or sequence classification.
@@ -176,9 +206,12 @@ $$
 When $M_{i,j} = -\infty$, $\exp(-\infty) = 0$, completely blocking information leakage from future tokens $j > i$.
 
 
-## Language Modeling and Generation #TODO
+## 3. Language Modeling and Generation #TODO - bridge text
+> How do we bridge the gap between this continuous hidden vector and a discrete token chosen from a vocabulary of 128,000 words?  
+> That is the job of the Language Modeling Head and the Decoding Pipeline.
 
-### LM Head
+
+### LM Head (Unembedding)
 After passing through all $L$ Transformer blocks, the final hidden state tensor $x^{(L)} \in \mathbb{R}^{B \times L \times d_{\text{model}}}$ represents the fully contextualized sequence representations.
 
 To turn these representations into token predictions, the final vector at the last sequence position $t$, $x_t^{(L)} \in \mathbb{R}^{d_{\text{model}}}$, must be mapped to probability distributions over a discrete vocabulary $V$.
@@ -194,7 +227,7 @@ graph TD
 ```
 
 
-### Softmax & Temperature Scaling
+### From Logits to Probabilities - Softmax & Temperature
 Raw logits $z_t$ are scaled by a scalar **Temperature** parameter $T > 0$ before computing Softmax probabilities:
 
 $$P(x_{t+1} = i \mid x_{1:t}) = \frac{\exp(z_{t, i} / T)}{\sum_{j=1}^{|V|} \exp(z_{t, j} / T)}$$
@@ -209,7 +242,10 @@ $$P(x_{t+1} = i \mid x_{1:t}) = \frac{\exp(z_{t, i} / T)}{\sum_{j=1}^{|V|} \exp(
 * **$T > 1.0$ (High Entropy / Creative):** 
     * Flattens the logit landscape toward a uniform distribution ($P(x_{t+1}) \to \frac{1}{|V|}$), increasing sample variance and hallucination risk.
 
-#TODO - why would we use this?
+![](../assets/diagrams/temperature_bars.svg)
+
+
+#TODO - why would we use this?  
 
 
 ### Temperature + Nucleus (Top-$p$) Sampling Mechanics
@@ -229,7 +265,7 @@ Dynamic Behavior: When the model is uncertain (e.g., creative writing), probabil
 
 
 
-## LLM Execution Phases
+## 4. LLM Execution Phases
 During inference, a Decoder-Only LLM executes in two distinct operational phases that exhibit radically different computational bottlenecks and hardware performance profiles.
 ### Prefill
 - Processing input prompt in parallel. This is done by  Matrix-Matrix multiplications (GEMM) of shape $[B, L_{\text{prompt}}, d_{\text{model}}] \times [d_{\text{model}}, d_{\text{out}}]$.
@@ -244,18 +280,22 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 - For every single token generated, the GPU must fetch all model weights (e.g., 14-16 GB for an 8B FP16 model) from VRAM into fast SRAM caches. This means the GPU cores are mostly idle, only to perform a tiny number of calculations on a single vector. 
 
 
-## The Context Window ($C_{\text{max}}$)
-#TODO - context window?
-
-
-
-## KV Cache:
+## 5. KV Cache:
 - Useful References - 
     - https://www.youtube.com/watch?v=7OrMFn86PlM
     - https://www.youtube.com/watch?v=RUlQmkFY4F8
     - https://www.youtube.com/watch?v=gpp57x_z_Jg
 
 - Explain the problem
+> Now, ask yourself a critical question: What happens to the Attention calculation when we generate token $N+1$?  
+> To compute Attention for that new token, it needs to attend to Query $N+1$ against the Keys and Values of every single preceding token in the sequence—tokens 1 all the way through $N$.  
+> If we naively recompute the Query, Key, and Value vectors for all $N$ past tokens at every step, our sequence computation scales quadratically at $O(L^2)$. By the time you reach token 2,000, your GPU is spending 99% of its time recalculating math it already did 1,999 steps ago.  
+> To fix this, we introduce the single most critical data structure in modern LLM inference: The Key-Value (KV) Cache.Instead of recomputing the past, we save the $K$ and $V$ tensors generated during the Prefill phase, store them in GPU memory, and simply concatenate the new token's Key and Value at every decode step. We trade memory capacity to buy back computational speed.
+
+![](../assets/kv_cache.png)
+
+![](../assets/kv_cache_mem_size.png)
+
 - How does KV cache help
 #TODO - explain + show the concept
 #TODO - move all example below to appendix? [appendix_a](appendixA_kvCache.md)
@@ -281,7 +321,15 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
     - Demo pt.2 - #TODO
     
 
-## Optimization Techniques:
+## 6. The Context Window ($C_{\text{max}}$)
+#TODO - context window??
+> Every model provider advertises massive context lengths today—32k, 128k, 1M, or even 2M tokens. But context length isn't just a setting you toggle in a config file. It is a strict physical boundary bounded by three distinct engineering brick walls:   
+> First, The Compute Wall: $O(L^2)$ quadratic complexity in the attention matrix during prompt ingestion.  
+> Second, The Memory Wall: The exponential VRAM footprint of the KV Cache during token generation—the exact bottleneck we calculated in Chapter 5.  
+> And third, The Positional Representation Wall: The mathematical failure of Rotary Position Embeddings (RoPE) when pushed outside their training distribution.
+
+
+## 7. Memory Optimization Techniques:
 - Useful reference: 
     - https://www.youtube.com/watch?v=o68RRGxAtDo
     - https://www.youtube.com/watch?v=_pWigIleZNs
@@ -319,8 +367,7 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
 - The Solution: FlashAttention uses tiling (online softmax) to compute attention block-by-block inside fast SRAM on the GPU chip without ever writing the massive $N \times N$ matrix back to HBM.
 - The Takeaway: While GQA saves VRAM space, FlashAttention gives you raw wall-clock speedup and exact (non-approximated) attention computation.
 
-
-
+![](../assets/llm_blocks.png)
 
 # More Cool stuff
 ### https://hfviewer.com/ - architectures and glossary
@@ -329,6 +376,29 @@ During inference, a Decoder-Only LLM executes in two distinct operational phases
     - GQA: https://hfviewer.com/glossary/grouped-query-attention/
     - Qwen3.8-27B: https://hfviewer.com/Qwen/Qwen3.8-27B
 
+```
+We started this lecture with a single, isolated Multi-Head Attention mechanism floating in space. Step by step, we built a modern Transformer block—adding RMSNorm to stabilize activation variance, Residual Connections to clear the gradient highway, and SwiGLU FFNs to store per-token factual memory.
+
+We saw how stacking these blocks gives us the Decoder-Only architecture, and how its final hidden states are mapped through the LM Head, modulated by Temperature, and sampled via Nucleus (Top-$p$) selection to generate text.
+
+But most importantly, we looked under the hood at the physical hardware reality. We learned that LLM inference is split into two distinct regimes: a compute-bound Prefill phase that ingests the prompt in parallel, and a memory-bandwidth-bound Decode phase that generates text token-by-token.
+
+To prevent an $O(L^2)$ computational explosion during decode, we introduced the KV Cache. But as we calculated, storing standard FP16 KV Cache for long context quickly consumes more VRAM than the model weights themselves.
+
+Finally, in Chapter 7, we saw how the field solved this memory wall:GQA reduced KV head counts by grouping queries to share keys and values.
+
+DeepSeek MLA compressed key-value states into low-rank latent vectors that absorb directly into the Query projections.FlashAttention tiled GPU SRAM memory to bypass the slow HBM bottleneck.
+
+And PagedAttention eliminated VRAM fragmentation using operating system-style memory paging.With these architectural and kernel-level optimizations, we transformed what was an $O(L^2)$ computational and memory wall into a lean, production-ready inference pipeline capable of processing millions of tokens.
+```
 
 # References:
 #TODO
+
+SwiGLU: 
+    https://www.youtube.com/watch?v=2FaI2Fen1mQ
+    https://www.youtube.com/watch?v=CXqx5LDOfs4
+MLA:
+    https://www.youtube.com/watch?v=0VLAoVGf_74 
+General LLM's: 
+    https://www.youtube.com/watch?v=BprirYymXrg

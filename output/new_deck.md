@@ -924,7 +924,7 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 <div class="fig">
 
-![h:420](../assets/kv_cache.png)
+![h:380](../assets/kv_cache.png)
 
 </div>
 
@@ -933,7 +933,7 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 <div class="fig">
 
-![h:420](../assets/mla.png)
+![h:380](../assets/mla.png)
 
 </div>
 
@@ -941,6 +941,9 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 </div>
 
 <center style="font-size: 0.7em;">
+
+
+<center>MLA mechanics: <a href="../docs/appendixC_MLA.md">Appendix C</a></center>
 
 <center>KV Cache: <a href="../docs/appendixA_kvCache.md">Appendix A: KV Cache sizes</a>, KV Cache sizes demo: <a href="../demo/kv_cache.py">KV Cache sizes demo</a></center>
 </center>

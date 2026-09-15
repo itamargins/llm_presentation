@@ -402,18 +402,20 @@ And PagedAttention eliminated VRAM fragmentation using operating system-style me
 ```
 
 # References:
-#TODO  
+General LLM's:
+    https://www.youtube.com/watch?v=BprirYymXrg  
 SwiGLU:   
     https://www.youtube.com/watch?v=2FaI2Fen1mQ  
     https://www.youtube.com/watch?v=CXqx5LDOfs4  
+KV Cache:
+    https://www.youtube.com/watch?v=7OrMFn86PlM
+    https://www.youtube.com/watch?v=RUlQmkFY4F8
+    https://www.youtube.com/watch?v=gpp57x_z_Jg
 MQA, GQA:
     https://www.youtube.com/watch?v=o68RRGxAtDo
     https://www.youtube.com/watch?v=_pWigIleZNs
 MLA:  
     https://www.youtube.com/watch?v=0VLAoVGf_74   
-General LLM's:   
-    https://www.youtube.com/watch?v=BprirYymXrg  
-KV Cache:
-    https://www.youtube.com/watch?v=7OrMFn86PlM
-    https://www.youtube.com/watch?v=RUlQmkFY4F8
-    https://www.youtube.com/watch?v=gpp57x_z_Jg
+    https://www.youtube.com/watch?v=DWBKSbj8CqA
+FlashAttention:
+    https://www.youtube.com/watch?v=RcFrRqcV4ZA

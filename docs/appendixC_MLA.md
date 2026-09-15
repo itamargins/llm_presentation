@@ -67,6 +67,13 @@ Basic MLA:
 MLA Absorption:
 ![](../assets/mla-absorption.png)
 
+![](../assets/mla_absorption_k.jpg)
+
+![](../assets/mla_absorption_v.jpg)
+
+---
+---
+
 Because matrix multiplication is associative—$(\mathbf{A} \mathbf{B}) \mathbf{C} = \mathbf{A} (\mathbf{B} \mathbf{C})$—the model can re-associate the linear transformations before running autoregressive generation.
 
 ### Step 1: Pre-computing the Combined Query-Key Matrix ($\mathbf{W}_n^{Q'}$)

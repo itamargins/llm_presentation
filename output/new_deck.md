@@ -202,7 +202,16 @@ table { font-size: 0.55em; }
 > In the last lecture, we saw how **Self-Attention** and **Multi-Head Attention** allow an embedded 
 token to look at other tokens through a single, or multiple independent projection subspaces.
 >
-> How do we take those outputs, recombine them, push them through a deep network without destroying gradients, and scale this to an 8-billion parameter model that actually generates text?
+> How do we take those outputs, recombine them, push them through a deep network 
+without destroying gradients, and scale this to an 8-billion parameter 
+model that actually generates text?
+
+<br>
+
+> A. Output Linear Projection
+> B. Residual Connections
+> C. Normalization
+> D. FFN
 
 ---
 
@@ -215,7 +224,7 @@ token to look at other tokens through a single, or multiple independent projecti
 </div>
 
 - Last time we ended with $h$ separate outputs of shape $[B, L, d_k]$. Simply concatenating MHA's $h$ outputs produces a tensor of shape $[B, L, h \cdot d_k] = [B, L, d_{\text{model}}]$.
-- However, without a linear projection, information extracted by head $i$ remains trappsed and cannot interact with representations learned by head $j$.
+- However, without a linear projection, information extracted by head $i$ remains trapped and cannot interact with representations learned by head $j$.
 So - $W^O$ ("output") is added.
 
 ---
@@ -224,10 +233,14 @@ So - $W^O$ ("output") is added.
 
 <div class="columns">
 <div>
+<br>
+<br>
 
 The concatenated head representations are projected back into the residual space using the output projection matrix $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$:
+<br>
 
 $$\text{MHA}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O$$
+
 
 - $\text{Concat}(\dots) \in \mathbb{R}^{B \times L \times d_{\text{model}}}$
 - $W^O \in \mathbb{R}^{d_{\text{model}} \times d_{\text{model}}}$
@@ -235,6 +248,8 @@ $$\text{MHA}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O$$
 
 </div>
 <div>
+<br>
+<br>
 
 Consider a Llama 3 8B configuration - $d_{\text{model}}=4096$, $h=32$, $d_k=128$, $B=2$, $L=512$:
 
@@ -283,7 +298,7 @@ The identity term $I$ guarantees that gradients flow backwards through all $L$ l
 
 - As updates $\Delta x^{(l)}$ are repeatedly added to the residual stream, the variance of the hidden activations scales monotonically with depth ($Var(x^{(l)}) \approx Var(x^{(0)}) + \sum Var(\Delta x)$). Without normalization, deep activations explode, pushing Softmax inputs into saturated zero-gradient regimes.
 
-- **BatchNorm** fails in sequence models because it **relies heavily on batch size** and suffers when dealing with variable sequence lengths and padding tokens-which corrupt cross-batch means and variances.
+- **BatchNorm** fails in sequence models because it **relies heavily on batch size** and suffers when dealing with variable sequence lengths and padding tokens, which corrupt cross-batch means and variances.
 - **LayerNorm** eliminates batch dependency entirely, providing identical, stable normalization behavior during both training and single-token inference without requiring inter-GPU synchronization during distributed training
 
 - LayerNorm means normalizing **over the layer dimension** in the network. It is regular normalization **over the activation outputs in the layer**, and includes two additional learnable parameters: $\beta$ and $\gamma$, which are additional bias and scale terms, respectively:
@@ -306,7 +321,7 @@ Where:
 
 - $a \in \mathbb{R}^{d_{\text{model}}}$ is the hidden activation vector for a single token.
 - $\gamma \in \mathbb{R}^{d_{\text{model}}}$ is a learnable scaling parameter.
-- $\epsilon$ is a small constant (e.g., $10^{-5}$) to prevent division by zero.
+- $\epsilon$ for numerical stability (e.g., $10^{-5}$)
 
 ---
 
@@ -321,6 +336,7 @@ Where:
 $$x^{(l)} = \text{LN}(x^{(l-1)} + f(x^{(l-1)}))$$
 
 Gradients passing through the normalization operator in the main residual path are scaled inversely by the norm of the activations. **Near the output layer, activations are large, making early layer updates tiny**. This required delicate "warm-up" learning rate schedules.
+<br>
 
 **Pre-LayerNorm (Modern Standard):**
 
@@ -344,8 +360,6 @@ Normalization is placed exclusively on the *branch* leading into the sub-layer. 
 
 ---
 
-<!-- _class: spacious -->
-
 ### D. FFN
 
 - The FFN is made of two linear layers (separated by an activation layer):
@@ -359,32 +373,33 @@ $$\text{FFN}(x) = \max(0, x W_1 + b_1) W_2 + b_2$$
 
 ### SwiGLU - Gate Features Using a Swish-Activated Branch
 <br>
-<div class="columns">
+<div class="columns" style="grid-template-columns: 3fr 2fr; align-items: start; gap: 1.5rem;">
 <div>
 
-GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are "data-dependent dropout" (usually derived by using $x*P(x)$, Gaussian CDF and Sigmoid respectively).
-
-<div class="fig">
-
-![w:420](../assets/activations.png)
-
-</div>
-
-</div>
-<div>
-
-<div class="fig">
-
-![w:420](../assets/swiglu_block.png)
-
-</div>
-
+- GELU (Gaussian Error Linear Unit) and SiLU (Sigmoid Linear Unit) are "data-dependent dropout" (usually derived by using $x*P(x)$, Gaussian CDF and Sigmoid respectively).
 - Two linear projections produce an up branch and a gate branch.
 - The gate branch applies Swish/SiLU and modulates the up branch via element-wise multiplication.
 - A final down projection maps the gated representation back to $d_{\text{model}}$.
 
 </div>
+<div>
+
+<div style="text-align: center; margin-bottom: 1rem;">
+
+![w:370](../assets/activations.png)
+
 </div>
+
+<div style="text-align: center;">
+
+![w:370](../assets/swiglu_block.png)
+
+</div>
+
+
+</div>
+</div>
+
 
 ---
 
@@ -419,33 +434,40 @@ $d_{\text{model}} = 4096 \implies d_{\text{ff}} = 14336 \approx \frac{8}{3} \tim
 
 ---
 
-<!-- _class: spacious -->
-
 ### Complete Transformer Model = Embedding + $N$ Blocks + LM Head
+
+$$x^{(l+1)} = x^{(l)} + \text{Attn}(\text{RMSNorm}(x^{(l)})) + \text{SwiGLU}(\text{RMSNorm}(x^{(l)}))$$
 
 <div class="columns">
 <div>
 
-
 - We now have a complete, fully functional Transformer block - with RMSNorm maintaining stability, Multi-Head Attention mixing sequence tokens, and SwiGLU FFN retrieving features.
-
-$$x^{(l+1)} = x^{(l)} + \text{Attn}(\text{RMSNorm}(x^{(l)})) + \text{SwiGLU}(\text{RMSNorm}(x^{(l)}))$$
 
 - A Transformer model stacks these blocks after token embedding and before the LM head logits projection.
 
 - Model depth lets contextual mixing and feature retrieval accumulate before next-token prediction.
 
+
+
 </div>
 <div>
 
-<div class="fig">
+<div class="columns" style="grid-template-columns: 1fr 1fr; align-items: center; gap: 1rem;">
+<div style="text-align: center;">
 
-![h:460](../assets/transformer.png)
+![h:420](../assets/transformer_block.png)
 
+</div>
+<div style="text-align: center;">
+
+![h:420](../assets/transformer.png)
+
+</div>
 </div>
 
 </div>
 </div>
+
 
 ---
 
@@ -512,11 +534,12 @@ $$x^{(l+1)} = x^{(l)} + \text{Attn}(\text{RMSNorm}(x^{(l)})) + \text{SwiGLU}(\te
 
 ---
 
+<!-- _class: spacious -->
+
 ### Encoder-Decoder
 <br>
 
-- Primary Use Case: Sequence-to-Sequence Transformation - Machine translation,  
-abstractive summarization, audio speech-to-text, and document processing.
+- Primary Use Case: Sequence-to-Sequence Transformation - Machine translation, abstractive summarization, audio speech-to-text, and document processing.
 - Popular Models: T5 / Flan-T5, BART, Whisper (Speech), NMT models.
 - Typical Size Range: 60M to 11B parameters (Small/Base: 60M–220M; Large/FLAN: 770M–11B).
 
@@ -658,7 +681,7 @@ Dynamic Behavior: **When the model is uncertain** (e.g., creative writing), prob
 - Processing input text in parallel by Matrix-Matrix multiplications (GEMM) of shape $[B, L_{\text{prompt}}, d_{\text{model}}] \times [d_{\text{model}}, d_{\text{out}}]$.
 - As this is decoder-only, the attention is causal.
 - The output is the set of logits for the **first output token**.
-- This stage is very intense compute-wise, utilizing all cuda cores.
+- This stage is very intense compute-wise, utilizing all CUDA cores.
 
 <br>
 
@@ -747,7 +770,11 @@ $$\text{KV Cache Bytes} = 2 \times b \times s \times l \times h_{kv} \times d_h 
 <br>
 <br>
 <br>
-<center>Demo: <a href="../demo/kv_cache.py">demo/kv_cache.py</a></center>
+<center>KV Cache: <a href="../docs/appendixA_kvCache.md">Appendix A: KV Cache sizes</a></center>
+<br>
+
+<center>KV Cache sizes demo: <a href="../demo/kv_cache.py">KV Cache sizes demo</a></center>
+
 
 ---
 
@@ -770,9 +797,12 @@ $$\text{KV Cache Bytes} = 2 \times b \times s \times l \times h_{kv} \times d_h 
 - This includes both the prompt tokens and previously generated tokens simultaneously. 
 
 - Any token beyond this limit must either be truncated, evicted from memory, or handled via specialized long-context mechanisms.
-<br>
+
+<div class="fig">
 
 ![h:320](../assets/context-window.svg)
+
+</div>
 
 ---
 ### How does it affect us?
@@ -781,7 +811,7 @@ $$\text{KV Cache Bytes} = 2 \times b \times s \times l \times h_{kv} \times d_h 
 
 - **Memory bottleneck**: **KV cache memory size grows linearly with L**.
 
-- **Positional Embeddings**: Absolute and Sinusoidal PE's literally didn't have a term for the L+1 position. As for RoPE, the relative distances are within the trained range (e.g. 4,096), so if L > 4,096, the relative distances (and therefore the rotation angles) are out of distribution.
+- **Positional Embeddings**: Absolute and Sinusoidal PEs literally didn't have a term for the L+1 position. As for RoPE, the relative distances are within the trained range (e.g. 4,096), so if L > 4,096, the relative distances (and therefore the rotation angles) are out of distribution.
 <br>
 <br>
 <br>
@@ -803,8 +833,8 @@ Memory Paging: **PagedAttention**
 
 ### Multi-Query Attention - Google, 2019 (Noam Shazeer*)
 
-- Uses a **single, shared key for all queries**. Afterwards, attention scores are scaled and softmax'd, multiplied by the values and concatenated back - same process as MHA.
-- This means that the shared $w_k$ is reposnible for organizing the shared representation space, where different queries can separate the relationships learned by different heads.
+- Uses a **single, shared key for all queries**. Afterwards, attention scores are scaled and softmaxed, multiplied by the values, and concatenated back - same process as MHA.
+- This means that the shared $w_k$ is responsible for organizing the shared representation space, where different queries can separate the relationships learned by different heads.
 - **Achieves a 7x speedup in inference time and only 0.3 degradation in perplexity metric (LM benchmark)**.
 
 <div class="fig">
@@ -837,7 +867,7 @@ Memory Paging: **PagedAttention**
 
 </div>
 
-- GQA is essentially as the spectrum between MQA (if #subgroups = H) or vanilla MHA (if #subgroups = 1).
+- GQA is essentially on the spectrum between MQA (if #subgroups = H) and vanilla MHA (if #subgroups = 1).
 
 ---
 
@@ -861,8 +891,11 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 ### Training Note: Converting MHA to MQA/GQA
 
-- Training with MQA/GQA from scratch is unstable, so authors proposed training on MHA, then converting to MQA/GQA by mean-pooling K-projections within groups, and finally training for a few steps more.
-- Mean pooling proved (empirically) better than taking the first key or taking a randomly-selected key from the group.
+- **Training with MQA/GQA from scratch is unstable**, so authors proposed training on MHA, then converting to MQA/GQA by mean-pooling K-projections within groups, and finally training for a few steps more.
+
+<br>
+
+- **Mean pooling proved (empirically) better** than taking the first key or taking a randomly-selected key from the group.
 
 ---
 
@@ -881,7 +914,7 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 <!-- _class: spacious -->
 
-### Multi-Head Latent Attention - DeeppSeek-AI, 2024
+### Multi-Head Latent Attention - DeepSeek-AI, 2024
 
 - MLA as a low-rank compression technique (compressing $K$ and $V$ into a tiny latent vector $c_t^{KV}$ via joint projection), showing how state-of-the-art architectures compress the cache even further without sacrificing MHA-level representation power.
 
@@ -903,10 +936,14 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 ![h:420](../assets/mla.png)
 
 </div>
+
+</div>
 </div>
 
-### [KV-cache Memory saving examples: Llama-3 70B Benchmark](../docs/appendixA_kvCache.md)
-</div>
+<center style="font-size: 0.7em;">
+
+<center>KV Cache: <a href="../docs/appendixA_kvCache.md">Appendix A: KV Cache sizes</a>, KV Cache sizes demo: <a href="../demo/kv_cache.py">KV Cache sizes demo</a></center>
+</center>
 
 ---
 
@@ -926,7 +963,7 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 ### Flash Attention (optional)
 
-- The Problem: Standard attention computes $A = \text{softmax}(QK^T / \sqrt{d})V$. Storing that intermediate $N \times N$ attention matrix $A$ in High Bandwidth Memory (HBM) creates an $O(N^2)$ memory footprint and makes attention memory-bandwidth bound rather than compute-bound.
+- The Problem: Storing the intermediate $N \times N$ attention matrix $A$ in High Bandwidth Memory (HBM) creates an $O(N^2)$ memory footprint and makes attention memory-bandwidth bound rather than compute-bound.
 - The Solution: FlashAttention uses tiling (online softmax) to compute attention block-by-block inside fast SRAM on the GPU chip without ever writing the massive $N \times N$ matrix back to HBM.
 - The Takeaway: While GQA saves VRAM space, FlashAttention gives you raw wall-clock speedup and exact (non-approximated) attention computation.
 
@@ -938,14 +975,13 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 ---
 
-<!-- _class: section-header -->
 ## Note: hfviewer
 
 <!-- _class: spacious -->
 
 ### https://hfviewer.com/ - architectures and glossary
 
-- Any model on HuggingFace can be visualized - simply replace the url.
+- Any model on HuggingFace can be visualized - simply replace the URL.
 	- Qwen3.8-27B: https://hfviewer.com/Qwen/Qwen3.8-27B
 	- GQA: https://hfviewer.com/glossary/grouped-query-attention/
 	- Transformer Block: https://hfviewer.com/glossary/transformer-block/
@@ -954,18 +990,64 @@ while **GQA achieves a minor reduction in quality while achieving the same speed
 
 <!-- _class: spacious -->
 
-## Summary
-- We started with the Self-Attention and Multi-head Attention, and built the basic Transformer Block around it, using RMSNorm, residual paths, attention, and SwiGLU.
+### Summary
 
+<div class="columns" style="grid-template-columns: 3fr 2fr; align-items: start; gap: 1.5rem;">
+<div>
+
+- We started with Self-Attention and Multi-Head Attention, and built the basic Transformer Block around it, using RMSNorm, residual paths, attention, and SwiGLU.
 - We stacked these blocks to get an encoder and decoder, wrapped by tokenization and LM layers - the bridges from tokens to the model's internal representation, and vice versa.
+- We saw how variants of these modules are used in frontier LLMs.
 
-- We saw how variants of these modules are used in frontier LLM's.
+</div>
+<div>
+
+<div class="columns" style="grid-template-columns: 1fr 1fr; align-items: center; gap: 1rem;">
+<div style="text-align: center;">
+
+![h:420](../assets/transformer.png)
+
+</div>
+<div style="text-align: center;">
+
+![h:420](../assets/bert.png)
+
+</div>
+</div>
+
+</div>
+</div>
+
+---
+
+<!-- _class: spacious -->
+
+### Summary
+
+<div class="columns" style="grid-template-columns: 3fr 2fr; align-items: start; gap: 1.5rem;">
+<div>
 
 - We saw the two distinct phases of LLM Inference: Prefill is compute-bound; Decode is memory-bandwidth-bound.
-
 - We understood the limitations these models have, regarding both memory and speed, and saw how contemporary innovation overcame them - KV cache.
+- And finally, we learned further techniques from active areas of research to optimize the behavior and deployment of these models.
 
-- And finallly, we learned further techniques from active areas of reasearch to optimize the behavior and deployment of these models.
+The next step is understanding how these models go through further training and tuning that push beyond supervised approaches.
 
-- The next step is understanding how these models go through further training and tuning that push beyond supervised approaches.
+</div>
+<div>
+
+<div style="text-align: center; margin-bottom: 1rem;">
+
+![h:250](../assets/kv_cache.png)
+
+</div>
+
+<div style="text-align: center;">
+
+![h:250](../assets/paged_attention.png)
+
+</div>
+
+</div>
+</div>
 

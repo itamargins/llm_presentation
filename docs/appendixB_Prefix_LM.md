@@ -5,7 +5,7 @@ Turns out this was tried and was less preferred than decoder-only.
 TL;DR - 1. Decoder-only uses the data more efficiently in training, 2. There is Prefix Caching (sharing prompt KV caches across different user requests that start with the same system prompt)
 </code>
 
-### Here is the answer from Gemini when discussin this subject:
+### Here is the answer from Gemini when discussing this subject:
 
 The exact architecture you are proposing is called Prefix-LM (used in models like PaLM's 20B variant, T5's encoder-decoder reformulation, or UniLM).                      
 

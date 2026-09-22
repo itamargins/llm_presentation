@@ -341,7 +341,7 @@ def print_descriptive_results(
 
 
 def print_lecture_takeaway(overall_speedup, late_speedup, per_token_cache_growth_mb):
-    print_section("8) Lecture Takeaway")
+    print_section("8) Demo Takeaway")
     print(c_header("THE CORE TRADE-OFF:"))
     print(f"1. {c_bold('Speed:')} KV Cache converts an {c_red('O(N^2)')} context recompute problem into an {c_green('O(1)')} step time decode process.")
     print(f"2. {c_bold('Memory:')} The price paid is VRAM growth of ~{c_val(f'{per_token_cache_growth_mb:.4f} MB')} per token generated.")
@@ -365,6 +365,13 @@ def print_try_this_next(cfg, arch_info):
         print()
 
     suggestion(
+        "user_prompt",
+        f'"{cfg.user_prompt}"',
+        "Type any free text here and re-run to see the model continue it -- the "
+        "continuation is printed in Step 9. Decoding is greedy, so the same prompt "
+        "always yields the same output.",
+    )
+    suggestion(
         "model_name",
         cfg.model_name,
         "Switch to 'Qwen/Qwen2.5-0.5B' or 'meta-llama/Llama-3.2-1B' to see Step 2's "
@@ -372,10 +379,11 @@ def print_try_this_next(cfg, arch_info):
         f"so the savings ratio above was {arch_info['savings_ratio']:.1f}x.",
     )
     suggestion(
-        "prompt_repeat",
-        cfg.prompt_repeat,
+        "context_filler_repeat",
+        cfg.context_filler_repeat,
         "Raise it to lengthen the initial context and make the no-cache quadratic "
-        "slowdown in Step 3 more dramatic; lower it for a faster run.",
+        "slowdown in Step 3 more dramatic; lower it for a faster run, or set it to "
+        "0 for a pure short-prompt run where the cache barely pays off.",
     )
     suggestion(
         "num_generated_tokens",
@@ -489,14 +497,24 @@ def get_quantized_cache_memory_mb(past_key_values):
     return total_bytes / (1024 ** 2)
 
 
-def apply_safety_cap(model, input_ids, num_generated_tokens):
-    """Dynamically clamp prompt length based on model max positions to avoid crashes."""
-    max_model_ctx = getattr(
+def get_max_context_length(model):
+    """Return the model's maximum context window across naming conventions."""
+    return getattr(
         model.config,
         "max_position_embeddings",
         getattr(model.config, "n_positions", getattr(model.config, "seq_length", 2048)),
     )
-    max_allowed_prompt = max_model_ctx - num_generated_tokens - 5
+
+
+def prompt_token_budget(model, num_generated_tokens):
+    """Largest prompt length that still leaves room for the requested generation."""
+    return get_max_context_length(model) - num_generated_tokens - 5
+
+
+def apply_safety_cap(model, input_ids, num_generated_tokens):
+    """Dynamically clamp prompt length based on model max positions to avoid crashes."""
+    max_model_ctx = get_max_context_length(model)
+    max_allowed_prompt = prompt_token_budget(model, num_generated_tokens)
 
     if input_ids.shape[1] > max_allowed_prompt:
         print(

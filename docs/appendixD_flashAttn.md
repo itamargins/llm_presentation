@@ -8,13 +8,13 @@
 ## Tiling
 ![](../assets/flash_attn/tiling.jpg)
 
-## shifted (stable) softmax
+## Safe Softmax
 ![](../assets/flash_attn/shifted_softmax.jpg)
 
 Softmax needs all the the output values to be calculated, so can't tile naively. Instead, we calculate "Online Softmax" - keep track of max (for shift) and sum (for denominator). This minimizes the number of reads from VRAM (from 3N to 2N).  
 Even better, we can keep track of a running attention output by directly multiplying the softmax weights by the corresponding values, which helps us avoid writing the softmax scores to VRAM.
 
-## online softmax
+## Online (on-the-fly) softmax
 
 ![](../assets/flash_attn/online_softmax.jpg)
 

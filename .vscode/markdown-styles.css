@@ -5,3 +5,7 @@ img {
     margin-left: auto;
     margin-right: auto;
 }
+mark {
+    background-color: #78dc78; /* Pale Green */
+    color: black;              /* Text color inside the highlight */
+}

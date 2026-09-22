@@ -1,4 +1,5 @@
 #%%
+import textwrap
 import time
 from dataclasses import dataclass
 from statistics import mean
@@ -13,6 +14,7 @@ from demo_utils import (
     c_val,
     c_yellow,
     c_dim,
+    c_bold,
     select_device,
     sync_device,
     print_section,
@@ -20,6 +22,7 @@ from demo_utils import (
     should_log_step,
     get_kv_cache_memory_mb,
     apply_safety_cap,
+    prompt_token_budget,
     print_descriptive_results,
     print_lecture_takeaway,
     print_try_this_next,
@@ -33,21 +36,43 @@ from demo_utils import (
 
 
 # ==============================================================================
-# LECTURE DEMO CONFIGURATION
-# Modify model choice and prominent parameters easily right here!
+# >>>>>>>>>>>>>>>>>>>>>>>>  FRONT-END: EDIT THIS BLOCK  <<<<<<<<<<<<<<<<<<<<<<<<
+#
+# Everything a presenter normally touches lives here. Sections A-B are the
+# interactive knobs (what you ask the model, how much it writes); C-E are the
+# benchmark/plumbing knobs.
 # ==============================================================================
 @dataclass
 class DemoConfig:
-    # Model options: "gpt2", "gpt2-medium", "Qwen/Qwen2.5-0.5B", "meta-llama/Llama-3.2-1B"
-    model_name: str = "gpt2"
-    base_sentence: str = "Deep learning architectures rely on self-attention mechanisms to sequence tokens. "
-    # Prompt repeat count (will be automatically capped if it exceeds model max context)
-    prompt_repeat: int = 1200
-    
-    # Number of decode steps to benchmark
+    # --- A. THE PROMPT: type any free text here --------------------------------
+    # The model continues this text; the continuation is printed in Step 9.
+    user_prompt: str = (
+        "The key advantage of caching keys and values during inference is"
+    )
+    # True  -> the demo asks you to type a prompt in the terminal on startup
+    #          (pressing Enter alone keeps user_prompt above).
+    # False -> use user_prompt above without asking.
+    ask_for_prompt_at_runtime: bool = False
+
+    # --- B. HOW MUCH TO GENERATE ----------------------------------------------
+    # Number of decode steps to benchmark (= length of the printed continuation)
     num_generated_tokens: int = 100
-    
-    # Execution & logging settings
+
+    # --- C. WHICH MODEL -------------------------------------------------------
+    # Options: "gpt2", "gpt2-medium", "Qwen/Qwen2.5-0.5B", "meta-llama/Llama-3.2-1B"
+    model_name: str = "gpt2"
+
+    # --- D. SYNTHETIC LONG-CONTEXT PADDING (benchmark knob) -------------------
+    # A free-text prompt is only a handful of tokens -- far too short to expose
+    # the quadratic cost of decoding without a cache. This filler sentence is
+    # therefore PREPENDED to user_prompt to fill the context window. The user
+    # prompt always stays last, so generation still continues YOUR text.
+    # Set context_filler_repeat = 0 for a pure short-prompt interactive run.
+    # (Repeat count is automatically capped to the model's max context.)
+    context_filler_sentence: str = "Deep learning architectures rely on self-attention mechanisms to sequence tokens. "
+    context_filler_repeat: int = 1200
+
+    # --- E. EXECUTION & LOGGING -----------------------------------------------
     device_mode: str = "auto"  # Options: "auto", "cuda", "cpu"
     step_log_every: int = 10
 
@@ -59,16 +84,44 @@ class DemoConfig:
     quantized_cache_nbits: int = 4
 
 
+# ==============================================================================
+# PROMPT / TEXT HELPERS
+# ==============================================================================
+def resolve_user_prompt(cfg):
+    """Return the text the model will continue, asked interactively if enabled."""
+    if not cfg.ask_for_prompt_at_runtime:
+        return cfg.user_prompt
+
+    try:
+        typed = input(c_yellow("\nEnter a prompt (Enter alone = use the default): ")).strip()
+    except EOFError:
+        # No interactive stdin (piped run, some notebook frontends): use the default.
+        return cfg.user_prompt
+    return typed or cfg.user_prompt
+
+
+def one_line_preview(text, max_chars=260):
+    """Collapse text to one line and truncate for terminal readability."""
+    single_line = " ".join(text.split())
+    if len(single_line) <= max_chars:
+        return single_line, False
+
+    keep_head = int(max_chars * 0.7)
+    keep_tail = max_chars - keep_head - 3
+    return f"{single_line[:keep_head]}...{single_line[-keep_tail:]}", True
+
+
 #%%
 # 1. SETUP MODEL, TOKENIZER & SAFETY CAPS
 cfg = DemoConfig()
 
 MODEL_NAME = cfg.model_name
-PROMPT_REPEAT = cfg.prompt_repeat
+FILLER_REPEAT = cfg.context_filler_repeat
 NUM_GENERATED_TOKENS = cfg.num_generated_tokens
 STEP_LOG_EVERY = cfg.step_log_every
 
 device = select_device(cfg.device_mode)
+user_prompt = resolve_user_prompt(cfg)
 
 print_section("1) Setup: model, prompt, and run configuration")
 print(
@@ -84,23 +137,56 @@ print(
 print(f"Model: {c_val(MODEL_NAME)}")
 print(f"Device: {c_val(str(device))}")
 print(f"Generated tokens requested: {c_val(str(NUM_GENERATED_TOKENS))}")
-print(f"Initial prompt repetition target: {c_val(str(PROMPT_REPEAT))}")
+
+# Show the prompt up front: every number reported below is measured on this input.
+prompt_view, prompt_view_truncated = one_line_preview(user_prompt)
+print(f"\n{c_bold('Prompt the model will continue')} {c_dim('(free text -- DemoConfig section A)')}")
+print(f"  {c_val(prompt_view)}")
+if prompt_view_truncated:
+    print(c_dim("  (shown truncated for readability)"))
+if FILLER_REPEAT > 0:
+    print(
+        c_dim(
+            f"  Prepended filler context: up to {FILLER_REPEAT} x "
+            f'"{cfg.context_filler_sentence.strip()}"'
+        )
+    )
+    print(c_dim("  Filler only lengthens the context; your prompt stays last, so the model continues it."))
+else:
+    print(c_dim("  No filler context (context_filler_repeat = 0): short-prompt run."))
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 model.to(device)
 model.eval()
 
-# Construct base prompt
-base_sentence = cfg.base_sentence
-prompt = base_sentence * PROMPT_REPEAT
-input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+# Construct the model input: filler context first, the user's free-text prompt
+# LAST, so the generated continuation is conditioned directly on the user text.
+user_ids = tokenizer.encode(user_prompt, return_tensors="pt")
+filler_ids = (
+    tokenizer.encode(cfg.context_filler_sentence * FILLER_REPEAT, return_tensors="pt")
+    if FILLER_REPEAT > 0
+    else torch.empty((1, 0), dtype=user_ids.dtype)
+)
+
+# Trim the FILLER (never the user prompt) so the prompt survives the context cap.
+filler_budget = max(0, prompt_token_budget(model, NUM_GENERATED_TOKENS) - user_ids.shape[1])
+filler_ids = filler_ids[:, :filler_budget]
+
+input_ids = torch.cat([filler_ids, user_ids], dim=-1).to(device)
+if input_ids.shape[1] == 0:
+    raise ValueError(
+        "Empty prompt: set cfg.user_prompt to some text, or cfg.context_filler_repeat > 0."
+    )
 
 # Enforce dynamic safety cap to prevent context overflow crashes
+# (only bites if the user prompt alone overflows the model's context window).
 input_ids, max_model_ctx = apply_safety_cap(model, input_ids, NUM_GENERATED_TOKENS)
 
 prompt_len = input_ids.shape[1]
 batch_size = input_ids.shape[0]
+user_prompt_len = min(user_ids.shape[1], prompt_len)
+filler_len = prompt_len - user_prompt_len
 
 # Model structural parameters for theoretical memory calculation
 n_layers = int(getattr(model.config, "n_layer", getattr(model.config, "num_hidden_layers", -1)))
@@ -111,6 +197,7 @@ head_dim = hidden_size // n_heads
 dtype_bytes = next(model.parameters()).element_size()
 
 print(f"Final safe prompt length: {c_green(str(prompt_len))} tokens (Max model window: {max_model_ctx})")
+print(c_dim(f"  = {filler_len} filler tokens + {user_prompt_len} tokens of your prompt"))
 print(f"Batch size: {batch_size}")
 
 print_narration("Before benchmarking, let's see how this model's attention heads shape the cache we're about to measure.")
@@ -130,16 +217,6 @@ times_with_cache = []
 generated_tokens_no_cache = []
 generated_tokens_with_cache = []
 
-
-def one_line_preview(text, max_chars=260):
-    """Collapse text to one line and truncate for terminal readability."""
-    single_line = " ".join(text.split())
-    if len(single_line) <= max_chars:
-        return single_line, False
-
-    keep_head = int(max_chars * 0.7)
-    keep_tail = max_chars - keep_head - 3
-    return f"{single_line[:keep_head]}...{single_line[-keep_tail:]}", True
 
 # ==============================================================================
 # PART 1: TIME BENCHMARKING
@@ -283,26 +360,32 @@ prefill_throughput, decode_throughput = print_prefill_vs_decode_explanation(
 print_narration("Distilling everything above into the one trade-off worth remembering.")
 print_lecture_takeaway(overall_speedup, late_speedup, per_token_cache_growth_mb)
 
-print_section("9) Decoded text snapshot")
-print_narration("As a sanity check, here's what the cached run actually generated.")
-prompt_text = tokenizer.decode(input_ids[0], skip_special_tokens=True)
+print_section("9) Model output for your prompt")
+print_narration("Here is what the cached run actually generated from the prompt shown in Step 1.")
 generated_text = tokenizer.decode(generated_tokens_with_cache, skip_special_tokens=True)
 
-prompt_view, prompt_truncated = one_line_preview(prompt_text, max_chars=260)
-generated_view, generated_truncated = one_line_preview(generated_text, max_chars=260)
+prompt_echo, prompt_echo_truncated = one_line_preview(user_prompt, max_chars=400)
+print(f"\n{c_yellow('Your prompt:')}")
+print(textwrap.fill(prompt_echo, width=88, initial_indent="  ", subsequent_indent="  "))
+if prompt_echo_truncated:
+    print(c_dim("  (shown truncated for readability)"))
+if filler_len > 0:
+    print(c_dim(f"  (preceded by {filler_len} filler tokens of synthetic context)"))
 
+print(f"\n{c_yellow(f'Continuation ({NUM_GENERATED_TOKENS} tokens):')}")
 print(
-    f"{c_yellow('Prompt:')} {c_val(prompt_view)} "
-    f"{c_yellow('| Generated:')} {c_green(generated_view)}"
+    c_green(
+        textwrap.fill(
+            generated_text.strip(), width=88, initial_indent="  ", subsequent_indent="  "
+        )
+    )
 )
-
-if prompt_truncated or generated_truncated:
-    truncated_parts = []
-    if prompt_truncated:
-        truncated_parts.append("prompt")
-    if generated_truncated:
-        truncated_parts.append("generated")
-    print(c_yellow(f"Note: {', '.join(truncated_parts)} text truncated for single-line readability."))
+print(
+    c_dim(
+        "\nDecoding is greedy (argmax), so this output is deterministic -- which is "
+        "exactly what lets the cached and uncached runs be compared token-for-token above."
+    )
+)
 
 # ==============================================================================
 # BONUS: QUANTIZED KV CACHE (optional -- may not be used)
